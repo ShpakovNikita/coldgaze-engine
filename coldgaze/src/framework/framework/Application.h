@@ -11,6 +11,8 @@ public:
 	~Application();
 
 	int run();
+	static std::vector<VkExtensionProperties> get_available_extensions();
+	static bool check_validation_layer_support();
 
 private:
 	int _init_window();

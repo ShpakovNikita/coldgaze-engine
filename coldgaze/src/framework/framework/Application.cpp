@@ -1,5 +1,4 @@
 #include "Application.h"
-#include <stdlib.h>
 #include "VScopedPtr.hpp"
 
 #include <vulkan/vulkan.h>
@@ -12,12 +11,22 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
-#include <iostream>
+
+
+#ifdef NDEBUG
+const bool enableValidationLayers = false;
+#else
+const bool enableValidationLayers = true;
+#endif
 
 namespace SApplication
 {
 	static const int width = 800;
 	static const int height = 600;
+
+	static const std::vector<const char*> validationLayers = {
+	"VK_LAYER_LUNARG_standard_validation"
+	};
 }
 
 Application::Application()
@@ -43,6 +52,46 @@ int Application::run()
 #endif
 }
 
+std::vector<VkExtensionProperties> Application::get_available_extensions()
+{
+	uint32_t extensionCount = 0;
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+	std::vector<VkExtensionProperties> extensions(extensionCount);
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+
+	return extensions;
+}
+
+bool Application::check_validation_layer_support()
+{
+	using namespace SApplication;
+
+	uint32_t layerCount;
+	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+	std::vector<VkLayerProperties> availableLayers(layerCount);
+	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+	for (const char* layer : validationLayers)
+	{
+		bool layerFound = false;
+
+		for (const auto& layerProperties : availableLayers) {
+			if (strcmp(layer, layerProperties.layerName) == 0) {
+				layerFound = true;
+				break;
+			}
+		}
+
+		if (!layerFound) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 int Application::_init_window()
 {
 	using namespace SApplication;
@@ -56,11 +105,6 @@ int Application::_init_window()
 
 	_window = glfwCreateWindow(_width, _height, "Vulkan window", nullptr, nullptr);
 
-	uint32_t extensionCount = 0;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-	std::cout << extensionCount << " extensions supported" << std::endl;
-
 	// working glm test
 	glm::mat4 matrix;
 	glm::vec4 vec;
@@ -71,6 +115,12 @@ int Application::_init_window()
 
 int Application::_init_vulkan()
 {
+	using namespace SApplication;
+
+	if (enableValidationLayers && !check_validation_layer_support()) {
+		throw std::runtime_error("validation layers requested, but not available!");
+	}
+
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Hello Triangle";
@@ -90,7 +140,14 @@ int Application::_init_vulkan()
 
 	createInfo.enabledExtensionCount = glfwExtensionCount;
 	createInfo.ppEnabledExtensionNames = glfwExtensions;
-	createInfo.enabledLayerCount = 0;
+
+	if (enableValidationLayers) {
+		createInfo.enabledLayerCount = validationLayers.size();
+		createInfo.ppEnabledLayerNames = validationLayers.data();
+	}
+	else {
+		createInfo.enabledLayerCount = 0;
+	}
 
 	if (vkCreateInstance(&createInfo, nullptr, _instance.replace()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create instance!");
@@ -101,6 +158,13 @@ int Application::_init_vulkan()
 
 int Application::_main_loop()
 {
+	std::cout << "available extensions:" << std::endl;
+	std::vector<VkExtensionProperties> extensions = get_available_extensions();
+
+	for (const auto& extension : extensions) {
+		std::cout << "\t" << extension.extensionName << std::endl;
+	}
+
 	while (!glfwWindowShouldClose(_window)) {
 		glfwPollEvents();
 	}
