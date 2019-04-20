@@ -9,15 +9,15 @@ public:
 	VScopedPtr() : VScopedPtr([](T, VkAllocationCallbacks*) {}) {}
 
 	VScopedPtr(std::function<void(T, VkAllocationCallbacks*)> deletef) {
-		this->deleter = [&](T obj) { deletef(obj, nullptr); };
+		deleter = [deletef](T obj) { deletef(obj, nullptr); };
 	}
 
 	VScopedPtr(const VScopedPtr<VkInstance>& instance, std::function<void(VkInstance, T, VkAllocationCallbacks*)> deletef) {
-		this->deleter = [&](T obj) { deletef(instance, obj, nullptr); };
+		deleter = [&instance, deletef](T obj) { deletef(instance, obj, nullptr); };
 	}
 
 	VScopedPtr(const VScopedPtr<VkDevice>& device, std::function<void(VkDevice, T, VkAllocationCallbacks*)> deletef) {
-		this->deleter = [&](T obj) { deletef(device, obj, nullptr); };
+		deleter = [&device, deletef](T obj) { deletef(device, obj, nullptr); };
 	}
 
 	~VScopedPtr() {

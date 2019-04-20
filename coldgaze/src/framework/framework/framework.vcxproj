@@ -20,6 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Application.h" />
+    <ClInclude Include="defines.h" />
+    <ClInclude Include="Forwards.hpp" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="VScopedPtr.hpp" />
   </ItemGroup>
