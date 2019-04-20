@@ -22,8 +22,10 @@
     <ClInclude Include="Application.h" />
     <ClInclude Include="defines.h" />
     <ClInclude Include="Forwards.hpp" />
+    <ClInclude Include="ProxyFunctions.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="VScopedPtr.hpp" />
+    <ClInclude Include="VulkanDebugCallbacks.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Application.cpp" />

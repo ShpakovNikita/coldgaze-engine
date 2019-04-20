@@ -11,6 +11,8 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
+#include "VulkanDebugCallbacks.hpp"
+#include <conio.h>
 
 
 #ifdef NDEBUG
@@ -92,6 +94,26 @@ bool Application::check_validation_layer_support()
 	return true;
 }
 
+std::vector<const char*> Application::get_required_extension()
+{
+	std::vector<const char*> extensions;
+
+	unsigned int glfwExtensionCount = 0;
+	const char** glfwExtensions;
+
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	
+	for (unsigned int i = 0; i < glfwExtensionCount; i++) {
+		extensions.push_back(glfwExtensions[i]);
+	}
+
+	if (enableValidationLayers) {
+		extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+	}
+
+	return extensions;
+}
+
 int Application::_init_window()
 {
 	using namespace SApplication;
@@ -121,6 +143,14 @@ int Application::_init_vulkan()
 		throw std::runtime_error("validation layers requested, but not available!");
 	}
 
+	_create_instance();
+	_try_setup_debug_callback();
+}
+
+int Application::_create_instance()
+{
+	using namespace SApplication;
+
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Hello Triangle";
@@ -133,13 +163,10 @@ int Application::_init_vulkan()
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = &appInfo;
 
-	unsigned int glfwExtensionCount = 0;
-	const char** glfwExtensions;
+	std::vector<const char*> glfwExtensions = get_required_extension();
 
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-	createInfo.enabledExtensionCount = glfwExtensionCount;
-	createInfo.ppEnabledExtensionNames = glfwExtensions;
+	createInfo.enabledExtensionCount = glfwExtensions.size();
+	createInfo.ppEnabledExtensionNames = glfwExtensions.data();
 
 	if (enableValidationLayers) {
 		createInfo.enabledLayerCount = validationLayers.size();
@@ -154,6 +181,25 @@ int Application::_init_vulkan()
 	}
 
 	return VK_SUCCESS;
+}
+
+bool Application::_try_setup_debug_callback()
+{
+	if (!enableValidationLayers)
+	{
+		return false;
+	}
+
+	VkDebugReportCallbackCreateInfoEXT createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+	createInfo.pfnCallback = debug_callback;
+
+	if (CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, _callback.replace()) != VK_SUCCESS) {
+		throw std::runtime_error("failed to set up debug callback!");
+	}
+
+	return true;
 }
 
 int Application::_main_loop()
@@ -172,6 +218,8 @@ int Application::_main_loop()
 	glfwDestroyWindow(_window);
 
 	glfwTerminate();
+
+	_getch();
 
 	return CG_INIT_SUCCESS;
 }
