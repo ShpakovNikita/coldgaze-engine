@@ -33,6 +33,7 @@ namespace SApplication
 
 Application::Application()
 	: _instance(vkDestroyInstance)
+ 	, _callback(_instance, DestroyDebugReportCallbackEXT)
 {
 }
 
