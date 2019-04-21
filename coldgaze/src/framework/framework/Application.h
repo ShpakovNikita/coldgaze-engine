@@ -3,6 +3,8 @@
 #include "Forwards.hpp"
 #include "VScopedPtr.hpp"
 
+class DevicePicker;
+
 // TODO: think about good error delivery, get rid of try catch
 class Application
 {
@@ -20,13 +22,15 @@ private:
 
 	int _init_vulkan();
 	int _create_instance();
-	bool _try_setup_debug_callback();
+	int _try_setup_debug_callback();
 
 	int _main_loop();
 
 	VScopedPtr<VkInstance> _instance;
 	VScopedPtr<VkDebugReportCallbackEXT> _callback;
 	GLFWwindow* _window = nullptr;
+
+	std::unique_ptr<DevicePicker> _picker;
 
 	int _width = 0;
 	int _height = 0;

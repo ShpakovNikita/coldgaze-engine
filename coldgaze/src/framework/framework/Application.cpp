@@ -4,15 +4,12 @@
 #include <vulkan/vulkan.h>
 #include <functional>
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 #include "VulkanDebugCallbacks.hpp"
-#include <conio.h>
+#include "DevicePicker.h"
 
 
 #ifdef NDEBUG
@@ -128,11 +125,6 @@ int Application::_init_window()
 
 	_window = glfwCreateWindow(_width, _height, "Vulkan window", nullptr, nullptr);
 
-	// working glm test
-	glm::mat4 matrix;
-	glm::vec4 vec;
-	auto test = matrix * vec;
-
 	return CG_INIT_SUCCESS;
 }
 
@@ -142,10 +134,15 @@ int Application::_init_vulkan()
 
 	if (enableValidationLayers && !check_validation_layer_support()) {
 		throw std::runtime_error("validation layers requested, but not available!");
+		return VK_ERROR_LAYER_NOT_PRESENT;
 	}
 
 	_create_instance();
 	_try_setup_debug_callback();
+
+	_picker->pick_best_device();
+
+	return VK_SUCCESS;
 }
 
 int Application::_create_instance()
@@ -179,16 +176,18 @@ int Application::_create_instance()
 
 	if (vkCreateInstance(&createInfo, nullptr, _instance.replace()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create instance!");
+		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
+	_picker = std::make_unique<DevicePicker>(_instance);
 	return VK_SUCCESS;
 }
 
-bool Application::_try_setup_debug_callback()
+int Application::_try_setup_debug_callback()
 {
 	if (!enableValidationLayers)
 	{
-		return false;
+		return VK_NOT_READY;
 	}
 
 	VkDebugReportCallbackCreateInfoEXT createInfo = {};
@@ -198,9 +197,10 @@ bool Application::_try_setup_debug_callback()
 
 	if (CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, _callback.replace()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug callback!");
+		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	return true;
+	return VK_SUCCESS;
 }
 
 int Application::_main_loop()
@@ -219,8 +219,6 @@ int Application::_main_loop()
 	glfwDestroyWindow(_window);
 
 	glfwTerminate();
-
-	_getch();
 
 	return CG_INIT_SUCCESS;
 }

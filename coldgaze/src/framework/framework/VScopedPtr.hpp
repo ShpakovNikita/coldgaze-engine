@@ -28,6 +28,11 @@ public:
 		return &object;
 	}
 
+	CG_DEPRECATED_MSG("bad practice test")
+	const T& Get() const {
+		return object;
+	}
+
 	T* replace() {
 		cleanup();
 		return &object;

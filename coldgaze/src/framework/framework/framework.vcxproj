@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClInclude Include="Application.h" />
     <ClInclude Include="defines.h" />
+    <ClInclude Include="DevicePicker.h" />
     <ClInclude Include="Forwards.hpp" />
     <ClInclude Include="ProxyFunctions.h" />
     <ClInclude Include="Renderer.h" />
@@ -29,6 +30,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Application.cpp" />
+    <ClCompile Include="DevicePicker.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Renderer.cpp" />
   </ItemGroup>

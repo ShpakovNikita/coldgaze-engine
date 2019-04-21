@@ -2,6 +2,7 @@
 
 #include <memory>
 #include "Application.h"
+#include <conio.h>
 
 int main() {
 	std::unique_ptr<Application> app = std::make_unique<Application>();
@@ -14,8 +15,10 @@ int main() {
 	catch (const std::runtime_error& e)
 	{
 		std::cerr << e.what() << std::endl;
-		return EXIT_FAILURE;
+		exec_result = EXIT_FAILURE;
 	}
+
+	_getch();
 
 	return exec_result;
 }
