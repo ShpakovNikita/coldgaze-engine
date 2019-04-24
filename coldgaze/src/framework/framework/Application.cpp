@@ -13,9 +13,9 @@
 
 
 #ifdef NDEBUG
-const bool enableValidationLayers = false;
+const bool enable_validation_layers = false;
 #else
-const bool enableValidationLayers = true;
+const bool enable_validation_layers = true;
 #endif
 
 namespace SApplication
@@ -23,7 +23,7 @@ namespace SApplication
 	static const int width = 800;
 	static const int height = 600;
 
-	static const std::vector<const char*> validationLayers = {
+	static const std::vector<const char*> validation_layers = {
 	"VK_LAYER_LUNARG_standard_validation"
 	};
 }
@@ -54,11 +54,11 @@ int Application::run()
 
 std::vector<VkExtensionProperties> Application::get_available_extensions()
 {
-	uint32_t extensionCount = 0;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+	uint32_t extension_count = 0;
+	vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
 
-	std::vector<VkExtensionProperties> extensions(extensionCount);
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+	std::vector<VkExtensionProperties> extensions(extension_count);
+	vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extensions.data());
 
 	return extensions;
 }
@@ -67,24 +67,24 @@ bool Application::check_validation_layer_support()
 {
 	using namespace SApplication;
 
-	uint32_t layerCount;
-	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+	uint32_t layer_count;
+	vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
 
-	std::vector<VkLayerProperties> availableLayers(layerCount);
-	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+	std::vector<VkLayerProperties> available_layers(layer_count);
+	vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
 
-	for (const char* layer : validationLayers)
+	for (const char* layer : validation_layers)
 	{
-		bool layerFound = false;
+		bool layer_found = false;
 
-		for (const auto& layerProperties : availableLayers) {
-			if (strcmp(layer, layerProperties.layerName) == 0) {
-				layerFound = true;
+		for (const auto& layer_properties : available_layers) {
+			if (strcmp(layer, layer_properties.layerName) == 0) {
+				layer_found = true;
 				break;
 			}
 		}
 
-		if (!layerFound) {
+		if (!layer_found) {
 			return false;
 		}
 	}
@@ -96,16 +96,16 @@ std::vector<const char*> Application::get_required_extension()
 {
 	std::vector<const char*> extensions;
 
-	unsigned int glfwExtensionCount = 0;
-	const char** glfwExtensions;
+	unsigned int glfw_extension_count = 0;
+	const char** glfw_extensions;
 
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
 	
-	for (unsigned int i = 0; i < glfwExtensionCount; i++) {
-		extensions.push_back(glfwExtensions[i]);
+	for (unsigned int i = 0; i < glfw_extension_count; i++) {
+		extensions.push_back(glfw_extensions[i]);
 	}
 
-	if (enableValidationLayers) {
+	if (enable_validation_layers) {
 		extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 	}
 
@@ -132,7 +132,7 @@ int Application::_init_vulkan()
 {
 	using namespace SApplication;
 
-	if (enableValidationLayers && !check_validation_layer_support()) {
+	if (enable_validation_layers && !check_validation_layer_support()) {
 		throw std::runtime_error("validation layers requested, but not available!");
 		return VK_ERROR_LAYER_NOT_PRESENT;
 	}
@@ -149,32 +149,32 @@ int Application::_create_instance()
 {
 	using namespace SApplication;
 
-	VkApplicationInfo appInfo = {};
-	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "Hello Triangle";
-	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.pEngineName = "No Engine";
-	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion = VK_API_VERSION_1_0;
+	VkApplicationInfo app_info = {};
+	app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	app_info.pApplicationName = "Hello Triangle";
+	app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	app_info.pEngineName = "No Engine";
+	app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	app_info.apiVersion = VK_API_VERSION_1_0;
 
-	VkInstanceCreateInfo createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	createInfo.pApplicationInfo = &appInfo;
+	VkInstanceCreateInfo create_info = {};
+	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	create_info.pApplicationInfo = &app_info;
 
 	std::vector<const char*> glfwExtensions = get_required_extension();
 
-	createInfo.enabledExtensionCount = glfwExtensions.size();
-	createInfo.ppEnabledExtensionNames = glfwExtensions.data();
+	create_info.enabledExtensionCount = glfwExtensions.size();
+	create_info.ppEnabledExtensionNames = glfwExtensions.data();
 
-	if (enableValidationLayers) {
-		createInfo.enabledLayerCount = validationLayers.size();
-		createInfo.ppEnabledLayerNames = validationLayers.data();
+	if (enable_validation_layers) {
+		create_info.enabledLayerCount = validation_layers.size();
+		create_info.ppEnabledLayerNames = validation_layers.data();
 	}
 	else {
-		createInfo.enabledLayerCount = 0;
+		create_info.enabledLayerCount = 0;
 	}
 
-	if (vkCreateInstance(&createInfo, nullptr, _instance.replace()) != VK_SUCCESS) {
+	if (vkCreateInstance(&create_info, nullptr, _instance.replace()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create instance!");
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
@@ -185,17 +185,17 @@ int Application::_create_instance()
 
 int Application::_try_setup_debug_callback()
 {
-	if (!enableValidationLayers)
+	if (!enable_validation_layers)
 	{
 		return VK_NOT_READY;
 	}
 
-	VkDebugReportCallbackCreateInfoEXT createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-	createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
-	createInfo.pfnCallback = debug_callback;
+	VkDebugReportCallbackCreateInfoEXT create_info = {};
+	create_info.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+	create_info.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+	create_info.pfnCallback = debug_callback;
 
-	if (CreateDebugReportCallbackEXT(_instance, &createInfo, nullptr, _callback.replace()) != VK_SUCCESS) {
+	if (CreateDebugReportCallbackEXT(_instance, &create_info, nullptr, _callback.replace()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to set up debug callback!");
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
