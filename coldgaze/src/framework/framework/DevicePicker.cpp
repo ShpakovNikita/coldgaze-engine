@@ -59,10 +59,10 @@ bool DevicePicker::is_device_suitable(int score)
 int DevicePicker::get_device_rating(VkPhysicalDevice device)
 {
 	VkPhysicalDeviceProperties device_properties;
-	vkGetPhysicalDeviceProperties(_vk_device, &device_properties);
+	vkGetPhysicalDeviceProperties(device, &device_properties);
 
 	VkPhysicalDeviceFeatures device_features;
-	vkGetPhysicalDeviceFeatures(_vk_device, &device_features);
+	vkGetPhysicalDeviceFeatures(device, &device_features);
 
 	int score = 0;
 

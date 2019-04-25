@@ -18,7 +18,7 @@ private:
 	bool is_device_suitable(int score);
 	int get_device_rating(VkPhysicalDevice device);
 
-	VScopedPtr<VkPhysicalDevice> _vk_device;
+	VkPhysicalDevice _vk_device;
 	std::vector<VkPhysicalDevice> _devices;
 	std::map<int, VkPhysicalDevice> _suitable_devices;
 };
