@@ -10,6 +10,7 @@
 #include <glm/mat4x4.hpp>
 #include "VulkanDebugCallbacks.hpp"
 #include "DevicePicker.h"
+#include "QueueSelector.h"
 
 
 #ifdef NDEBUG
@@ -140,7 +141,11 @@ int Application::_init_vulkan()
 	_create_instance();
 	_try_setup_debug_callback();
 
+	_picker = std::make_unique<DevicePicker>(_instance);
 	_picker->pick_best_device();
+
+	_queue_selector = std::make_unique<QueueSelector>(_picker->get_device());
+	_queue_selector->get_queue_family_indices();
 
 	return VK_SUCCESS;
 }
@@ -179,7 +184,6 @@ int Application::_create_instance()
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
 
-	_picker = std::make_unique<DevicePicker>(_instance);
 	return VK_SUCCESS;
 }
 

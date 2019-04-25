@@ -24,6 +24,7 @@
     <ClInclude Include="DevicePicker.h" />
     <ClInclude Include="Forwards.hpp" />
     <ClInclude Include="ProxyFunctions.h" />
+    <ClInclude Include="QueueSelector.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="VScopedPtr.hpp" />
     <ClInclude Include="VulkanDebugCallbacks.hpp" />
@@ -32,6 +33,7 @@
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="DevicePicker.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="QueueSelector.cpp" />
     <ClCompile Include="Renderer.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

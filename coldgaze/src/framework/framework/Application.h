@@ -4,6 +4,7 @@
 #include "VScopedPtr.hpp"
 
 class DevicePicker;
+class QueueSelector;
 
 // TODO: think about good error delivery, get rid of try catch
 class Application
@@ -31,6 +32,7 @@ private:
 	GLFWwindow* _window = nullptr;
 
 	std::unique_ptr<DevicePicker> _picker;
+	std::unique_ptr<QueueSelector> _queue_selector;
 
 	int _width = 0;
 	int _height = 0;
