@@ -23,6 +23,7 @@ private:
 
 	int _init_vulkan();
 	int _create_instance();
+	int _create_surface();
 	// TODO: move in class
 	int _create_logical_device();
 	int _try_setup_debug_callback();
@@ -32,6 +33,7 @@ private:
 	VScopedPtr<VkInstance> _instance;
 	VScopedPtr<VkDevice> _logical_device;
 	VScopedPtr<VkDebugReportCallbackEXT> _callback;
+	VScopedPtr<VkSurfaceKHR> _surface;
 	GLFWwindow* _window = nullptr;
 	VkQueue _graphics_queue;
 	VkPhysicalDeviceFeatures _device_features;

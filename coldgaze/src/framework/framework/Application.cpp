@@ -1,7 +1,6 @@
 #include "Application.h"
 #include "VScopedPtr.hpp"
 
-#include <vulkan/vulkan.h>
 #include <functional>
 
 #define GLM_FORCE_RADIANS
@@ -33,6 +32,7 @@ Application::Application()
 	: _instance(vkDestroyInstance)
 	, _logical_device(vkDestroyDevice)
  	, _callback(_instance, DestroyDebugReportCallbackEXT)
+	, _surface(_instance, vkDestroySurfaceKHR)
 {
 }
 
@@ -141,6 +141,7 @@ int Application::_init_vulkan()
 
 	_create_instance();
 	_try_setup_debug_callback();
+	_create_surface();
 
 	_picker = std::make_unique<DevicePicker>(_instance);
 	_picker->pick_best_device();
@@ -187,6 +188,23 @@ int Application::_create_instance()
 	}
 
 	return VK_SUCCESS;
+}
+
+int Application::_create_surface()
+{
+	int result = -1;
+#ifdef _WIN32
+	VkWin32SurfaceCreateInfoKHR create_info;
+	create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+	create_info.hwnd = glfwGetWin32Window(_window);
+	create_info.hinstance = GetModuleHandle(nullptr);
+	result = CG_INIT_SUCCESS;
+#else
+	throw std::runtime_error("non win32 system currently not supported");
+	result = GLFW_PLATFORM_ERROR;
+#endif 
+
+	return result;
 }
 
 int Application::_create_logical_device()
