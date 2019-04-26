@@ -28,6 +28,7 @@
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="VScopedPtr.hpp" />
     <ClInclude Include="VulkanDebugCallbacks.hpp" />
+    <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Application.cpp" />
@@ -35,6 +36,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="QueueSelector.cpp" />
     <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="Window.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>15.0</VCProjectVersion>

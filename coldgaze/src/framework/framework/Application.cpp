@@ -10,18 +10,15 @@
 #include "VulkanDebugCallbacks.hpp"
 #include "DevicePicker.h"
 #include "QueueSelector.h"
-
-
-#ifdef NDEBUG
-const bool enable_validation_layers = false;
-#else
-const bool enable_validation_layers = true;
-#endif
+#include "Renderer.h"
 
 namespace SApplication
 {
-	static const int width = 800;
-	static const int height = 600;
+#ifdef NDEBUG
+	const bool enable_validation_layers = false;
+#else
+	const bool enable_validation_layers = true;
+#endif
 
 	static const std::vector<const char*> validation_layers = {
 	"VK_LAYER_LUNARG_standard_validation"
@@ -42,16 +39,13 @@ Application::~Application()
 
 int Application::run()
 {
-	// TODO: proper result check, logging and output 
-	_init_window();
-	_init_vulkan();
-	_main_loop();
+	_window = std::make_unique<CG::Window>();
 
-#ifdef _WIN32
-	return EXIT_SUCCESS;
-#elif __linux__ 
-	return 0;
-#endif
+	// TODO: proper result check, logging and output 
+	int result = _init_vulkan();
+	result |= _main_loop();
+
+	return result;
 }
 
 std::vector<VkExtensionProperties> Application::get_available_extensions()
@@ -96,6 +90,8 @@ bool Application::check_validation_layer_support()
 
 std::vector<const char*> Application::get_required_extension()
 {
+	using namespace SApplication;
+
 	std::vector<const char*> extensions;
 
 	unsigned int glfw_extension_count = 0;
@@ -114,22 +110,6 @@ std::vector<const char*> Application::get_required_extension()
 	return extensions;
 }
 
-int Application::_init_window()
-{
-	using namespace SApplication;
-
-	glfwInit();
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-	_width = width;
-	_height = height;
-
-	_window = glfwCreateWindow(_width, _height, "Vulkan window", nullptr, nullptr);
-
-	return CG_INIT_SUCCESS;
-}
-
 int Application::_init_vulkan()
 {
 	using namespace SApplication;
@@ -141,7 +121,7 @@ int Application::_init_vulkan()
 
 	_create_instance();
 	_try_setup_debug_callback();
-	_create_surface();
+	_window->create_surface(eRenderApi::vulkan);
 
 	_picker = std::make_unique<DevicePicker>(_instance);
 	_picker->pick_best_device();
@@ -190,23 +170,6 @@ int Application::_create_instance()
 	return VK_SUCCESS;
 }
 
-int Application::_create_surface()
-{
-	int result = -1;
-#ifdef _WIN32
-	VkWin32SurfaceCreateInfoKHR create_info;
-	create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-	create_info.hwnd = glfwGetWin32Window(_window);
-	create_info.hinstance = GetModuleHandle(nullptr);
-	result = CG_INIT_SUCCESS;
-#else
-	throw std::runtime_error("non win32 system currently not supported");
-	result = GLFW_PLATFORM_ERROR;
-#endif 
-
-	return result;
-}
-
 int Application::_create_logical_device()
 {
 	using namespace SApplication;
@@ -250,6 +213,8 @@ int Application::_create_logical_device()
 
 int Application::_try_setup_debug_callback()
 {
+	using namespace SApplication;
+
 	if (!enable_validation_layers)
 	{
 		return VK_NOT_READY;
@@ -277,13 +242,10 @@ int Application::_main_loop()
 		std::cout << "\t" << extension.extensionName << std::endl;
 	}
 
-	while (!glfwWindowShouldClose(_window)) {
-		glfwPollEvents();
+	while (_window->is_window_alive()) {
+		_window->poll_events();
 	}
-
-	glfwDestroyWindow(_window);
-
-	glfwTerminate();
+	_window->terminate();
 
 	return CG_INIT_SUCCESS;
 }
