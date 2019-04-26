@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "vulkan\vulkan_core.h"
 
 using namespace CG;
 
@@ -8,7 +9,9 @@ namespace SWindow
 	static const int height = 600;
 }
 
-Window::Window()
+Window::Window(const VScopedPtr<VkInstance>& instance)
+	: _instance(instance)
+	, _surface(instance, vkDestroySurfaceKHR)
 {
 	_init_window();
 }
@@ -54,31 +57,38 @@ int Window::_init_window()
 	return CG_INIT_SUCCESS;
 }
 
-int CG::Window::create_surface(eRenderApi renderApi)
+VkSurfaceKHR CG::Window::create_surface(eRenderApi renderApi)
 {
-	int result = -1;
-
 	switch (renderApi)
 	{
 	case eRenderApi::none:
 		break;
 
 	case eRenderApi::vulkan:
+	{
 #ifdef _WIN32
 		VkWin32SurfaceCreateInfoKHR create_info;
 		create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 		create_info.hwnd = glfwGetWin32Window(_window);
 		create_info.hinstance = GetModuleHandle(nullptr);
-		result = CG_INIT_SUCCESS;
+
+		auto CreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(_instance, "vkCreateWin32SurfaceKHR");
+
+		if (!CreateWin32SurfaceKHR || CreateWin32SurfaceKHR(_instance, &create_info, nullptr, _surface.replace()) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create window surface!");
+		}
+
+		if (glfwCreateWindowSurface(_instance, _window, nullptr, _surface.replace()) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create window surface!");
+		}
 #else
 		throw std::runtime_error("non win32 system currently not supported");
-		result = GLFW_PLATFORM_ERROR;
 #endif 
 		break;
-
+	}
 	default:
 		break;
 	}
 
-	return result;
+	return _surface;
 }

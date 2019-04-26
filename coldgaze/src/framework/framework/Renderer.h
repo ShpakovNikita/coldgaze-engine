@@ -1,4 +1,5 @@
 #pragma once
+#include "Forwards.hpp"
 
 enum class eRenderApi
 {
@@ -7,10 +8,15 @@ enum class eRenderApi
 	size,
 };
 
-class Renderer
+namespace CG
 {
-public:
-	Renderer();
-	~Renderer();
-};
+	class Renderer
+	{
+	public:
+		Renderer(VkSurfaceKHR surface);
+		~Renderer();
 
+	private:
+		VkSurfaceKHR _surface;
+	};
+}

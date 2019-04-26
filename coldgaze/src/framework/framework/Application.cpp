@@ -29,7 +29,6 @@ Application::Application()
 	: _instance(vkDestroyInstance)
 	, _logical_device(vkDestroyDevice)
  	, _callback(_instance, DestroyDebugReportCallbackEXT)
-	, _surface(_instance, vkDestroySurfaceKHR)
 {
 }
 
@@ -39,8 +38,6 @@ Application::~Application()
 
 int Application::run()
 {
-	_window = std::make_unique<CG::Window>();
-
 	// TODO: proper result check, logging and output 
 	int result = _init_vulkan();
 	result |= _main_loop();
@@ -121,7 +118,11 @@ int Application::_init_vulkan()
 
 	_create_instance();
 	_try_setup_debug_callback();
-	_window->create_surface(eRenderApi::vulkan);
+
+	_window = std::make_unique<CG::Window>(_instance);
+
+	VkSurfaceKHR surface = _window->create_surface(eRenderApi::vulkan);
+	_renderer = std::make_unique<CG::Renderer>(surface);
 
 	_picker = std::make_unique<DevicePicker>(_instance);
 	_picker->pick_best_device();

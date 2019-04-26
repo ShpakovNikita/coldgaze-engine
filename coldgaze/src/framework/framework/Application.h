@@ -32,10 +32,10 @@ private:
 	VScopedPtr<VkInstance> _instance;
 	VScopedPtr<VkDevice> _logical_device;
 	VScopedPtr<VkDebugReportCallbackEXT> _callback;
-	VScopedPtr<VkSurfaceKHR> _surface;
 	VkQueue _graphics_queue;
 	VkPhysicalDeviceFeatures _device_features;
 
+	std::unique_ptr<CG::Renderer> _renderer;
 	std::unique_ptr<CG::Window> _window;
 	std::unique_ptr<DevicePicker> _picker;
 	std::unique_ptr<QueueSelector> _queue_selector;

@@ -1,8 +1,9 @@
 #include "Renderer.h"
 
+using namespace CG;
 
-
-Renderer::Renderer()
+Renderer::Renderer(VkSurfaceKHR surface)
+	: _surface(surface)
 {
 }
 

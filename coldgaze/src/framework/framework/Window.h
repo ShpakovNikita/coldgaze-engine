@@ -1,13 +1,14 @@
 #pragma once
 #include "Forwards.hpp"
 #include "Renderer.h"
+#include "VScopedPtr.hpp"
 
 namespace CG
 {
 	class Window
 	{
 	public:
-		Window();
+		Window(const VScopedPtr<VkInstance>& instance);
 		~Window();
 
 		bool is_window_alive();
@@ -15,12 +16,14 @@ namespace CG
 		void terminate();
 
 		// TODO: remove this param, make something smarter. Maybe because of specific to vulkan definition remove this from renderer
-		int create_surface(eRenderApi renderApi);
+		VkSurfaceKHR create_surface(eRenderApi renderApi);
 
 	private:
 		int _init_window();
 
 		GLFWwindow* _window = nullptr;
+		VkInstance _instance;
+		VScopedPtr<VkSurfaceKHR> _surface;
 
 		int _width = 0;
 		int _height = 0;
