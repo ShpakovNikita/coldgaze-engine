@@ -1,9 +1,12 @@
 [submodule "lib/entt"]
-	path = coldgaze/lib/entt
+	path = coldgaze/include/entt
 	url = https://github.com/skypjack/entt.git
 [submodule "lib/glm"]
-	path = coldgaze/lib/glm
+	path = coldgaze/include/glm
 	url = https://github.com/g-truc/glm.git
 [submodule "coldgaze/lib/glfw"]
-	path = coldgaze/lib/glfw
+	path = coldgaze/include/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "coldgaze/include/imgui"]
+	path = coldgaze/include/imgui
+	url = https://github.com/ocornut/imgui.git

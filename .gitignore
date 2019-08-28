@@ -298,3 +298,11 @@ __pycache__/
 .vscode
 .DS_Store
 build*/
+
+# CMake
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Makefile
+cmake_install.cmake
+install_manifest.txt
