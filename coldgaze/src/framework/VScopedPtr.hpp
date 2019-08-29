@@ -1,6 +1,6 @@
 #pragma once
 #include <functional>
-#include "vulkan\vulkan_core.h"
+#include "vulkan\vulkan.h"
 
 
 template <typename T>
