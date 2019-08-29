@@ -1,14 +1,17 @@
 SET(PROJECT_NAME Coldgaze)
 SET(PROJECT_FOLDER ${CMAKE_CURRENT_SOURCE_DIR}/framework)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/framework)
+
 message(STATUS "Generating project file for ${PROJECT_FOLDER}")
 # Main
-file(GLOB SOURCE *.cpp ${BASE_HEADERS} ${PROJECT_FOLDER}/*.cpp)
-SET(MAIN_CPP ${PROJECT_FOLDER}/${PROJECT_NAME}.cpp)
+file(GLOB_RECURSE HEADERS *.hpp *.h)
+file(GLOB_RECURSE SOURCE ${HEADERS} *.cpp)
+
+set(MAIN_CPP ${PROJECT_FOLDER}/${PROJECT_NAME}.cpp)
 if(EXISTS ${PROJECT_FOLDER}/main.cpp)
     SET(MAIN_CPP ${PROJECT_FOLDER}/main.cpp)
-ENDIF()
-file(GLOB ADD_SOURCE "../include/imgui/*.cpp")
-SET(SOURCE ${SOURCE} ${ADD_SOURCE})
+endif()
+file(GLOB IMGUI_SOURCE "../include/imgui/*.cpp")
 
 # Add shaders
 set(SHADER_DIR "../data/shaders/${PROJECT_NAME}")
@@ -16,13 +19,16 @@ file(GLOB SHADERS "${SHADER_DIR}/*.vert" "${SHADER_DIR}/*.frag" "${SHADER_DIR}/*
 source_group("Shaders" FILES ${SHADERS})
 
 if(WIN32)
-    set(COLDGAZE_LIBRARIES glfw)
+    set(COLDGAZE_LIBRARIES "")
+    # set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:CONSOLE")
 
-    add_executable(${PROJECT_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${SHADERS})
+    add_executable(${PROJECT_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${IMGUI_SOURCE} ${SHADERS})
+    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
     target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${ASSIMP_LIBRARIES} ${WINLIBS} ${GLFW_LIBRARIES} ${COLDGAZE_LIBRARIES})
 else(WIN32)
-    add_executable(${PROJECT_NAME} ${MAIN_CPP} ${SOURCE} ${SHADERS})
-    target_link_libraries(${PROJECT_NAME} ${GLFW_LIBRARIES})
+    add_executable(${PROJECT_NAME} ${MAIN_CPP} ${SOURCE} ${IMGUI_SOURCE} ${SHADERS})
+    source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
+    target_link_libraries(${PROJECT_NAME})
 endif(WIN32)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

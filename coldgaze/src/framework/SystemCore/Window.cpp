@@ -1,5 +1,5 @@
 #include "Window.h"
-#include "vulkan\vulkan_core.h"
+#include "vulkan\vulkan.h"
 
 using namespace CG;
 
@@ -66,24 +66,9 @@ VkSurfaceKHR CG::Window::create_surface(eRenderApi renderApi)
 
 	case eRenderApi::vulkan:
 	{
-#ifdef _WIN32
-		VkWin32SurfaceCreateInfoKHR create_info;
-		create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-		create_info.hwnd = glfwGetWin32Window(_window);
-		create_info.hinstance = GetModuleHandle(nullptr);
-
-		auto CreateWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)vkGetInstanceProcAddr(_instance, "vkCreateWin32SurfaceKHR");
-
-		if (!CreateWin32SurfaceKHR || CreateWin32SurfaceKHR(_instance, &create_info, nullptr, _surface.replace()) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create window surface!");
-		}
-
 		if (glfwCreateWindowSurface(_instance, _window, nullptr, _surface.replace()) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create window surface!");
 		}
-#else
-		throw std::runtime_error("non win32 system currently not supported");
-#endif 
 		break;
 	}
 	default:

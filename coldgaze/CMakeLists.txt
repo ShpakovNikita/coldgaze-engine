@@ -9,7 +9,6 @@ project(${NAME})
 
 include_directories("include")
 include_directories("include/glm")
-include_directories("include/glfw/include")
 include_directories("include/entt/src")
 
 # Use FindVulkan module added with CMAKE 3.7
@@ -77,15 +76,5 @@ if(WIN32)
 else(WIN32)
 	link_libraries(${Vulkan_LIBRARY} ${ASSIMP_LIBRARIES})
 endif(WIN32)
-
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/")
-
-set( ENKITS_BUILD_EXAMPLES OFF CACHE BOOL "Build basic example applications" )
-set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL  "GLFW lib only" )
-set( GLFW_BUILD_TESTS OFF CACHE BOOL  "GLFW lib only" )
-set( GLFW_BUILD_DOCS OFF CACHE BOOL  "GLFW lib only" )
-set( GLFW_BUILD_INSTALL OFF CACHE BOOL  "GLFW lib only" )
-
-add_subdirectory( "include/glfw" )
 
 add_subdirectory(src)

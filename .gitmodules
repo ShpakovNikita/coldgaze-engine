@@ -4,9 +4,6 @@
 [submodule "lib/glm"]
 	path = coldgaze/include/glm
 	url = https://github.com/g-truc/glm.git
-[submodule "coldgaze/lib/glfw"]
-	path = coldgaze/include/glfw
-	url = https://github.com/glfw/glfw.git
 [submodule "coldgaze/include/imgui"]
 	path = coldgaze/include/imgui
 	url = https://github.com/ocornut/imgui.git
