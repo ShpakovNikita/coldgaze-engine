@@ -1,10 +1,11 @@
 #include <iostream>
-
 #include <memory>
-#include "SystemCore/Application.h"
 #include <conio.h>
 
-int main() {
+#include "SDL2/SDL.h"
+#include "SystemCore/Application.h"
+
+int main(int argc, char* argv[]) {
 	std::unique_ptr<Application> app = std::make_unique<Application>();
 	
 	int exec_result;

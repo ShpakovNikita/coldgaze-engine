@@ -11,6 +11,7 @@
 #include "DevicePicker.h"
 #include "QueueSelector.h"
 #include "Renderer.h"
+#include <signal.h>
 
 namespace SApplication
 {
@@ -94,7 +95,8 @@ std::vector<const char*> Application::get_required_extension()
 	unsigned int glfw_extension_count = 0;
 	const char** glfw_extensions;
 
-	glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+	glfw_extensions;
+	// = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
 	
 	for (unsigned int i = 0; i < glfw_extension_count; i++) {
 		extensions.push_back(glfw_extensions[i]);
@@ -112,6 +114,7 @@ int Application::_init_vulkan()
 	using namespace SApplication;
 
 	if (enable_validation_layers && !check_validation_layer_support()) {
+		raise(SIGINT);
 		throw std::runtime_error("validation layers requested, but not available!");
 		return VK_ERROR_LAYER_NOT_PRESENT;
 	}
@@ -150,10 +153,10 @@ int Application::_create_instance()
 	create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	create_info.pApplicationInfo = &app_info;
 
-	std::vector<const char*> glfwExtensions = get_required_extension();
+	// std::vector<const char*> glfwExtensions = get_required_extension();
 
-	create_info.enabledExtensionCount = glfwExtensions.size();
-	create_info.ppEnabledExtensionNames = glfwExtensions.data();
+	// create_info.enabledExtensionCount = glfwExtensions.size();
+	// create_info.ppEnabledExtensionNames = glfwExtensions.data();
 
 	if (enable_validation_layers) {
 		create_info.enabledLayerCount = validation_layers.size();
@@ -164,6 +167,7 @@ int Application::_create_instance()
 	}
 
 	if (vkCreateInstance(&create_info, nullptr, _instance.replace()) != VK_SUCCESS) {
+		raise(SIGINT);
 		throw std::runtime_error("failed to create instance!");
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
@@ -204,6 +208,7 @@ int Application::_create_logical_device()
 	}
 
 	if (vkCreateDevice(_picker->get_device(), &create_info, nullptr, _logical_device.replace()) != VK_SUCCESS) {
+		raise(SIGINT);
 		throw std::runtime_error("failed to create logical device!");
 		vkGetDeviceQueue(_logical_device, indices.graphics_family, 0, &_graphics_queue);
 		return VK_ERROR_DEVICE_LOST;
@@ -227,6 +232,7 @@ int Application::_try_setup_debug_callback()
 	create_info.pfnCallback = debug_callback;
 
 	if (CreateDebugReportCallbackEXT(_instance, &create_info, nullptr, _callback.replace()) != VK_SUCCESS) {
+		CG_ASSERT(false);
 		throw std::runtime_error("failed to set up debug callback!");
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}

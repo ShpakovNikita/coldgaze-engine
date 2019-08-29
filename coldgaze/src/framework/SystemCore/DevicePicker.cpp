@@ -1,5 +1,6 @@
 #include "DevicePicker.h"
-
+#include <SDL2/SDL.h>
+#include <signal.h>
 
 DevicePicker::DevicePicker(const VScopedPtr<VkInstance> &instance)
 	: _vk_device(VK_NULL_HANDLE)
@@ -23,6 +24,7 @@ int DevicePicker::pick_best_device()
 	_vk_device = it->second;
 
 	if (_vk_device == VK_NULL_HANDLE || !is_device_suitable(it->first)) {
+		raise(SIGINT);
 		throw std::runtime_error("failed to find a suitable GPU!");
 		return VK_ERROR_DEVICE_LOST;
 	}
@@ -36,6 +38,7 @@ int DevicePicker::reset_instance(const VScopedPtr<VkInstance> &instance)
 	vkEnumeratePhysicalDevices(instance, &devices_count, nullptr);
 	
 	if (devices_count == 0) {
+		raise(SIGINT);
 		throw std::runtime_error("failed to find GPUs with Vulkan support!");
 		return VK_ERROR_DEVICE_LOST;
 	}

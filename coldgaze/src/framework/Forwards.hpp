@@ -2,6 +2,7 @@
 
 #include "defines.h"
 
+#include <signal.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -17,3 +18,20 @@
 #endif
 
 struct GLFWwindow;
+
+#ifdef _DEBUG
+#ifdef _WIN32
+#define CG_ASSERT(statement)					 \
+{												 \
+	if (!statement)								 \
+	{											 \
+		std::cerr << ##statement << std::endl;   \
+		__debugbreak();				     		 \
+	}											 \
+}
+#else
+#define CG_ASSERT(statement) {}
+#endif
+#else
+#define CG_ASSERT(statement) {}
+#endif

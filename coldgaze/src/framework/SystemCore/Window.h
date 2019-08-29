@@ -3,6 +3,8 @@
 #include "Renderer.h"
 #include "VScopedPtr.hpp"
 
+struct SDL_Window;
+
 namespace CG
 {
 	class Window
@@ -21,7 +23,8 @@ namespace CG
 	private:
 		int _init_window();
 
-		GLFWwindow* _window = nullptr;
+		bool _is_window_alive = true;
+		SDL_Window* _window = nullptr;
 		VkInstance _instance;
 		VScopedPtr<VkSurfaceKHR> _surface;
 
