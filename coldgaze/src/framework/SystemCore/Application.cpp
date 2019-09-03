@@ -12,6 +12,8 @@
 #include "QueueSelector.h"
 #include "Renderer.h"
 #include <signal.h>
+#include "vulkan/vulkan_core.h"
+#include "vulkan/vulkan_win32.h"
 
 namespace SApplication
 {
@@ -40,7 +42,7 @@ Application::~Application()
 int Application::run()
 {
 	// TODO: proper result check, logging and output 
-	int result = _init_vulkan();
+	int result = _init_application();
 	result |= _main_loop();
 
 	return result;
@@ -109,18 +111,18 @@ std::vector<const char*> Application::get_required_extension()
 	return extensions;
 }
 
-int Application::_init_vulkan()
+int Application::_init_application()
 {
 	using namespace SApplication;
 
 	if (enable_validation_layers && !check_validation_layer_support()) {
-		raise(SIGINT);
+		CG_ASSERT(false);
 		throw std::runtime_error("validation layers requested, but not available!");
 		return VK_ERROR_LAYER_NOT_PRESENT;
 	}
 
-	_create_instance();
-	_try_setup_debug_callback();
+	_vk_create_instance();
+	_vk_try_setup_debug_callback();
 
 	_window = std::make_unique<CG::Window>(_instance);
 
@@ -137,7 +139,7 @@ int Application::_init_vulkan()
 	return VK_SUCCESS;
 }
 
-int Application::_create_instance()
+int Application::_vk_create_instance()
 {
 	using namespace SApplication;
 
@@ -155,19 +157,24 @@ int Application::_create_instance()
 
 	// std::vector<const char*> glfwExtensions = get_required_extension();
 
-	// create_info.enabledExtensionCount = glfwExtensions.size();
-	// create_info.ppEnabledExtensionNames = glfwExtensions.data();
+	std::vector<const char*> extensions = { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
 
 	if (enable_validation_layers) {
 		create_info.enabledLayerCount = validation_layers.size();
 		create_info.ppEnabledLayerNames = validation_layers.data();
+		extensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+		
+		create_info.enabledExtensionCount = 3;
 	}
 	else {
 		create_info.enabledLayerCount = 0;
+		create_info.enabledExtensionCount = 2;
 	}
 
+	create_info.ppEnabledExtensionNames = extensions.data();
+
 	if (vkCreateInstance(&create_info, nullptr, _instance.replace()) != VK_SUCCESS) {
-		raise(SIGINT);
+		CG_ASSERT(false);
 		throw std::runtime_error("failed to create instance!");
 		return VK_ERROR_INITIALIZATION_FAILED;
 	}
@@ -208,16 +215,17 @@ int Application::_create_logical_device()
 	}
 
 	if (vkCreateDevice(_picker->get_device(), &create_info, nullptr, _logical_device.replace()) != VK_SUCCESS) {
-		raise(SIGINT);
+		CG_ASSERT(false);
 		throw std::runtime_error("failed to create logical device!");
-		vkGetDeviceQueue(_logical_device, indices.graphics_family, 0, &_graphics_queue);
 		return VK_ERROR_DEVICE_LOST;
 	}
+
+	vkGetDeviceQueue(_logical_device, indices.graphics_family, 0, &_graphics_queue);
 
 	return CG_INIT_SUCCESS;
 }
 
-int Application::_try_setup_debug_callback()
+int Application::_vk_try_setup_debug_callback()
 {
 	using namespace SApplication;
 

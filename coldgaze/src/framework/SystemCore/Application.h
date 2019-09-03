@@ -20,12 +20,12 @@ public:
 	static std::vector<const char*> get_required_extension();
 
 private:
-	int _init_vulkan();
-	int _create_instance();
+	int _init_application();
+	int _vk_create_instance();
 
 	// TODO: move in class
 	int _create_logical_device();
-	int _try_setup_debug_callback();
+	int _vk_try_setup_debug_callback();
 
 	int _main_loop();
 

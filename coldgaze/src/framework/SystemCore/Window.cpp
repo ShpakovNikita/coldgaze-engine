@@ -69,7 +69,7 @@ VkSurfaceKHR CG::Window::create_surface(eRenderApi renderApi)
 	case eRenderApi::vulkan:
 	{
 		if (!SDL_Vulkan_CreateSurface(_window, _instance, _surface.replace())) {
-			raise(SIGINT);
+			CG_ASSERT(false);
 			throw std::runtime_error("failed to create window surface!");
 		}
 		break;
