@@ -1,6 +1,6 @@
 #pragma once
 #include "Forwards.hpp"
-#include "Renderer.h"
+#include "RenderModule/VulkanApi/Renderer.h"
 #include "VScopedPtr.hpp"
 
 struct SDL_Window;
@@ -16,6 +16,8 @@ namespace CG
 		bool is_window_alive();
 		void poll_events();
 		void terminate();
+
+		int32_t show_message_box(const std::string& title, const std::string& message);
 
 		// TODO: remove this param, make something smarter. Maybe because of specific to vulkan definition remove this from renderer
 		VkSurfaceKHR create_surface(eRenderApi renderApi);

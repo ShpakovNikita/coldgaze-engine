@@ -7,11 +7,12 @@
 
 int main(int argc, char* argv[]) {
 	std::unique_ptr<Application> app = std::make_unique<Application>();
-	
+
 	int exec_result;
 	try
 	{
-		exec_result = app->run();
+		app->run();
+		exec_result = EXIT_SUCCESS;
 	}
 	catch (const std::runtime_error& e)
 	{

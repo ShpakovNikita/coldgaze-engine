@@ -10,7 +10,7 @@
 #include "VulkanDebugCallbacks.hpp"
 #include "DevicePicker.h"
 #include "QueueSelector.h"
-#include "Renderer.h"
+#include "RenderModule/VulkanApi/Renderer.h"
 #include <signal.h>
 #include "vulkan/vulkan_core.h"
 #include "vulkan/vulkan_win32.h"
@@ -18,9 +18,9 @@
 namespace SApplication
 {
 #ifdef NDEBUG
-	const bool enable_validation_layers = false;
+	constexpr bool enable_validation_layers = false;
 #else
-	const bool enable_validation_layers = true;
+	constexpr bool enable_validation_layers = true;
 #endif
 
 	static const std::vector<const char*> validation_layers = {
@@ -39,13 +39,10 @@ Application::~Application()
 {
 }
 
-int Application::run()
+void Application::run()
 {
-	// TODO: proper result check, logging and output 
-	int result = _init_application();
-	result |= _main_loop();
-
-	return result;
+	_init_application();
+	_run_main_loop();
 }
 
 std::vector<VkExtensionProperties> Application::get_available_extensions()
@@ -111,35 +108,18 @@ std::vector<const char*> Application::get_required_extension()
 	return extensions;
 }
 
-int Application::_init_application()
+void Application::_init_application()
 {
 	using namespace SApplication;
 
-	if (enable_validation_layers && !check_validation_layer_support()) {
-		CG_ASSERT(false);
-		throw std::runtime_error("validation layers requested, but not available!");
-		return VK_ERROR_LAYER_NOT_PRESENT;
-	}
-
-	_vk_create_instance();
-	_vk_try_setup_debug_callback();
-
-	_window = std::make_unique<CG::Window>(_instance);
-
-	VkSurfaceKHR surface = _window->create_surface(eRenderApi::vulkan);
-	_renderer = std::make_unique<CG::Renderer>(surface);
-
-	_picker = std::make_unique<DevicePicker>(_instance);
-	_picker->pick_best_device();
-
-	_queue_selector = std::make_unique<QueueSelector>(_picker->get_device());
-
-	_create_logical_device();
-
-	return VK_SUCCESS;
+	_init_render_api(SApplication::enable_validation_layers);
+	_init_window();
+	_init_device();
+	_init_swapchain();
+	_init_render();
 }
 
-int Application::_vk_create_instance()
+void Application::_vk_create_instance()
 {
 	using namespace SApplication;
 
@@ -176,10 +156,7 @@ int Application::_vk_create_instance()
 	if (vkCreateInstance(&create_info, nullptr, _instance.replace()) != VK_SUCCESS) {
 		CG_ASSERT(false);
 		throw std::runtime_error("failed to create instance!");
-		return VK_ERROR_INITIALIZATION_FAILED;
 	}
-
-	return VK_SUCCESS;
 }
 
 int Application::_create_logical_device()
@@ -248,7 +225,7 @@ int Application::_vk_try_setup_debug_callback()
 	return VK_SUCCESS;
 }
 
-int Application::_main_loop()
+int Application::_run_main_loop()
 {
 	std::cout << "available extensions:" << std::endl;
 	std::vector<VkExtensionProperties> extensions = get_available_extensions();
@@ -263,4 +240,42 @@ int Application::_main_loop()
 	_window->terminate();
 
 	return CG_INIT_SUCCESS;
+}
+
+void Application::_init_render_api(bool enableValidationLayers)
+{
+	if (enableValidationLayers && !check_validation_layer_support()) {
+		CG_ASSERT(false);
+		throw std::runtime_error("validation layers requested, but not available!");
+	}
+
+	_vk_create_instance();
+	_vk_try_setup_debug_callback();
+}
+
+void Application::_init_window()
+{
+	_window = std::make_unique<CG::Window>(_instance);
+
+	_surface = _window->create_surface(eRenderApi::vulkan);
+}
+
+void Application::_init_device()
+{
+	_picker = std::make_unique<DevicePicker>(_instance);
+	_picker->pick_best_device();
+
+	_queue_selector = std::make_unique<QueueSelector>(_picker->get_device());
+
+	_create_logical_device();
+}
+
+void Application::_init_swapchain()
+{
+
+}
+
+void Application::_init_render()
+{
+	_renderer = std::make_unique<CG::Renderer>(_surface);
 }

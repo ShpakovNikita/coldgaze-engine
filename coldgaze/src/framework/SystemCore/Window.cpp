@@ -59,6 +59,14 @@ int Window::_init_window()
 	return CG_INIT_SUCCESS;
 }
 
+int32_t CG::Window::show_message_box(const std::string& title, const std::string& message)
+{
+	return SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
+		title.c_str(),
+		message.c_str(),
+		nullptr);
+}
+
 VkSurfaceKHR CG::Window::create_surface(eRenderApi renderApi)
 {
 	switch (renderApi)
