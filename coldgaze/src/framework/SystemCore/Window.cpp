@@ -67,6 +67,32 @@ int32_t CG::Window::show_message_box(const std::string& title, const std::string
 		nullptr);
 }
 
+CG::eAssertResponse CG::Window::show_assert_box(const char* stacktrace)
+{
+	const SDL_MessageBoxButtonData buttons[] = {
+		{ 0, static_cast<int>(CG::eAssertResponse::kBreak), "break" },
+		{ SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, static_cast<int>(CG::eAssertResponse::kContinue), "continue" },
+	};
+
+	const SDL_MessageBoxData messageboxdata = {
+		SDL_MESSAGEBOX_INFORMATION,
+		nullptr,
+		"CG::Assert",
+		stacktrace,
+		SDL_arraysize(buttons),
+		buttons,
+		nullptr,
+	};
+
+	int buttonid;
+	if (SDL_ShowMessageBox(&messageboxdata, &buttonid) < 0) {
+		SDL_Log("error displaying message box");
+		return CG::eAssertResponse::kNone;
+	}
+
+	return static_cast<CG::eAssertResponse>(buttonid);
+}
+
 VkSurfaceKHR CG::Window::create_surface(eRenderApi renderApi)
 {
 	switch (renderApi)

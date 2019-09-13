@@ -15,6 +15,8 @@
 #include "vulkan/vulkan_core.h"
 #include "vulkan/vulkan_win32.h"
 
+std::function<CG::eAssertResponse(const char*)> kShowAssertMessage;
+
 namespace SApplication
 {
 #ifdef NDEBUG
@@ -111,6 +113,8 @@ std::vector<const char*> Application::get_required_extension()
 void Application::_init_application()
 {
 	using namespace SApplication;
+
+	kShowAssertMessage = [](const char*) {return CG::eAssertResponse::kNone; };
 
 	_init_render_api(SApplication::enable_validation_layers);
 	_init_window();
@@ -258,6 +262,10 @@ void Application::_init_window()
 	_window = std::make_unique<CG::Window>(_instance);
 
 	_surface = _window->create_surface(eRenderApi::vulkan);
+
+# ifdef _DEBUG
+	kShowAssertMessage = [this](const char* stacktrace) { return _window->show_assert_box(stacktrace); };
+# endif
 }
 
 void Application::_init_device()

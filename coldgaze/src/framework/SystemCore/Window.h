@@ -18,6 +18,7 @@ namespace CG
 		void terminate();
 
 		int32_t show_message_box(const std::string& title, const std::string& message);
+		eAssertResponse show_assert_box(const char* stacktrace);
 
 		// TODO: remove this param, make something smarter. Maybe because of specific to vulkan definition remove this from renderer
 		VkSurfaceKHR create_surface(eRenderApi renderApi);
