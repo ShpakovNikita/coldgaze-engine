@@ -35,7 +35,19 @@ void Window::poll_events()
 {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
-		/* handle your event here */
+		switch (event.type)
+		{
+			case SDL_QUIT:
+			{
+				_is_window_alive = false;
+			}
+			case SDL_KEYDOWN:
+			{
+
+			}
+			default:
+				break;
+		}
 	}
 }
 
@@ -57,6 +69,11 @@ int Window::_init_window()
 	_window = SDL_CreateWindow("CG window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, _width, _height, SDL_WINDOW_VULKAN);
 
 	return CG_INIT_SUCCESS;
+}
+
+void CG::Window::draw()
+{
+
 }
 
 int32_t CG::Window::show_message_box(const std::string& title, const std::string& message)
@@ -113,4 +130,14 @@ VkSurfaceKHR CG::Window::create_surface(eRenderApi renderApi)
 	}
 
 	return _surface;
+}
+
+int CG::Window::GetHeight()
+{
+	return _height;
+}
+
+int CG::Window::GetWidth()
+{
+	return _width;
 }

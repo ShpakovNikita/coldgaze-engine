@@ -119,7 +119,6 @@ void Application::_init_application()
 	_init_render_api(SApplication::enable_validation_layers);
 	_init_window();
 	_init_device();
-	_init_swapchain();
 	_init_render();
 }
 
@@ -163,32 +162,35 @@ void Application::_vk_create_instance()
 	}
 }
 
-int Application::_create_logical_device()
+int Application::_create_logical_device(VkQueueFlags requestedQueueTypes /*= VK_QUEUE_GRAPHICS_BIT*/)
 {
 	using namespace SApplication;
 
+	_queue_selector = std::make_unique<QueueSelector>(_picker->get_device());
 	QueueFamilyIndices indices = _queue_selector->get_queue_family_indices();
+	std::vector<VkDeviceQueueCreateInfo> queue_create_infos = {};
 
-	VkDeviceQueueCreateInfo queue_create_info = {};
-	queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	queue_create_info.queueFamilyIndex = indices.graphics_family;
-	queue_create_info.queueCount = 1;
+	const float queue_priority = 0.0f;
 
-	float queue_priority = 1.0f;
-	queue_create_info.pQueuePriorities = &queue_priority;
+	if (requestedQueueTypes & VK_QUEUE_GRAPHICS_BIT)
+	{
+		VkDeviceQueueCreateInfo queue_info{};
+		queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		queue_info.queueFamilyIndex = indices.graphics_family;
+		queue_info.queueCount = 1;
+		queue_info.pQueuePriorities = &queue_priority;
+		queue_create_infos.push_back(queue_info);
+	}
 
 	VkDeviceCreateInfo create_info = {};
 	create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-
-	create_info.pQueueCreateInfos = &queue_create_info;
-	create_info.queueCreateInfoCount = 1;
-
+	create_info.pQueueCreateInfos = queue_create_infos.data();
+	create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
 	create_info.pEnabledFeatures = &_device_features;
-
 	create_info.enabledExtensionCount = 0;
 
 	if (enable_validation_layers) {
-		create_info.enabledLayerCount = validation_layers.size();
+		create_info.enabledLayerCount = static_cast<uint32_t>(validation_layers.size());
 		create_info.ppEnabledLayerNames = validation_layers.data();
 	}
 	else {
@@ -240,6 +242,7 @@ int Application::_run_main_loop()
 
 	while (_window->is_window_alive()) {
 		_window->poll_events();
+		_window->draw();
 	}
 	_window->terminate();
 
@@ -273,8 +276,6 @@ void Application::_init_device()
 	_picker = std::make_unique<DevicePicker>(_instance);
 	_picker->pick_best_device();
 
-	_queue_selector = std::make_unique<QueueSelector>(_picker->get_device());
-
 	_create_logical_device();
 }
 
@@ -285,5 +286,6 @@ void Application::_init_swapchain()
 
 void Application::_init_render()
 {
-	_renderer = std::make_unique<CG::Renderer>(_surface);
+	_renderer = std::make_unique<CG::Renderer>(_surface, _picker->get_device(), _logical_device.Get(), _window->GetWidth(), _window->GetHeight());
+	_renderer->Prepare();
 }

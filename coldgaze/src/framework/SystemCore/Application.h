@@ -24,7 +24,7 @@ private:
 	void _vk_create_instance();
 
 	// TODO: move in class
-	int _create_logical_device();
+	int _create_logical_device(VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT);
 	int _vk_try_setup_debug_callback();
 
 	int _run_main_loop();
@@ -39,7 +39,7 @@ private:
 	VScopedPtr<VkDevice> _logical_device;
 	VScopedPtr<VkDebugReportCallbackEXT> _callback;
 	VkQueue _graphics_queue;
-	VkPhysicalDeviceFeatures _device_features;
+	VkPhysicalDeviceFeatures _device_features{};
 	VkSurfaceKHR _surface;
 
 	std::unique_ptr<CG::Renderer> _renderer;
