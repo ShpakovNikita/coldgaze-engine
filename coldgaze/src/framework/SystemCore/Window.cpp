@@ -71,11 +71,6 @@ int Window::_init_window()
 	return CG_INIT_SUCCESS;
 }
 
-void CG::Window::draw()
-{
-
-}
-
 int32_t CG::Window::show_message_box(const std::string& title, const std::string& message)
 {
 	return SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,

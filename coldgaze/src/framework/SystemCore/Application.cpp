@@ -189,6 +189,10 @@ int Application::_create_logical_device(VkQueueFlags requestedQueueTypes /*= VK_
 	create_info.pEnabledFeatures = &_device_features;
 	create_info.enabledExtensionCount = 0;
 
+	std::vector<const char*> extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	create_info.ppEnabledExtensionNames = extensions.data();
+	create_info.enabledExtensionCount = 1;
+
 	if (enable_validation_layers) {
 		create_info.enabledLayerCount = static_cast<uint32_t>(validation_layers.size());
 		create_info.ppEnabledLayerNames = validation_layers.data();
@@ -242,7 +246,7 @@ int Application::_run_main_loop()
 
 	while (_window->is_window_alive()) {
 		_window->poll_events();
-		_window->draw();
+		_renderer->Draw();
 	}
 	_window->terminate();
 
@@ -286,6 +290,7 @@ void Application::_init_swapchain()
 
 void Application::_init_render()
 {
-	_renderer = std::make_unique<CG::Renderer>(_surface, _picker->get_device(), _logical_device.Get(), _window->GetWidth(), _window->GetHeight());
+	_renderer = std::make_unique<CG::Renderer>(_surface, _picker->get_device(), _logical_device.Get(), 
+		_queue_selector->get_queue_family_indices().graphics_family, _window->GetWidth(), _window->GetHeight());
 	_renderer->Prepare();
 }

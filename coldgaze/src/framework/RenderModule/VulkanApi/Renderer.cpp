@@ -1,4 +1,5 @@
 #include "Renderer.h"
+#include "SystemCore/QueueSelector.h"
 
 using namespace CG;
 
@@ -11,28 +12,90 @@ namespace SRenderer
 }
 
 enum {
-	MAX_PRESENT_MODE_COUNT = 6, // At the moment in spec
-	FRAME_COUNT = 2,
+	MAX_PRESENT_MODE_COUNT = 6,
 	PRESENT_MODE_MAILBOX_IMAGE_COUNT = 3,
 	PRESENT_MODE_DEFAULT_IMAGE_COUNT = 2,
 };
 
-Renderer::Renderer(VkSurfaceKHR aSurface, VkPhysicalDevice aPhysicalDevice, VkDevice aDevice, int aWidth, int aHeight)
+Renderer::Renderer(VkSurfaceKHR aSurface, VkPhysicalDevice aPhysicalDevice, VkDevice aDevice,
+	int aQueueFamilyIndex, int aWidth, int aHeight)
 	: surface(aSurface)
 	, physicalDevice(aPhysicalDevice)
 	, device(aDevice)
 	, width(aWidth)
 	, height(aHeight)
+	, familyIndex(aQueueFamilyIndex)
 {
 }
 
 Renderer::~Renderer()
 {
+	vkDestroySwapchainKHR(device, swapchain, nullptr);
 }
 
 void CG::Renderer::Prepare()
 {
 	InitSwapchain();
+	InitRender();
+}
+
+void CG::Renderer::Draw()
+{
+	uint32_t index = (queueFrameIndex++) % FRAME_COUNT;
+	vkWaitForFences(device, 1, &frameFences[index], VK_TRUE, UINT64_MAX);
+	vkResetFences(device, 1, &frameFences[index]);
+
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[index], VK_NULL_HANDLE, &imageIndex);
+
+	VkCommandBufferBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer(commandBuffers[index], &beginInfo);
+
+	VkImageSubresourceRange subResourceRange = {};
+	subResourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	subResourceRange.baseMipLevel = 0;
+	subResourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+	subResourceRange.baseArrayLayer = 0;
+	subResourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+	VkImageMemoryBarrier clearMemoryBarrier = {};
+	clearMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	clearMemoryBarrier.srcAccessMask = 0;
+	clearMemoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	clearMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	clearMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	clearMemoryBarrier.srcQueueFamilyIndex = familyIndex;
+	clearMemoryBarrier.dstQueueFamilyIndex = familyIndex;
+	clearMemoryBarrier.image = swapchainImages[imageIndex];
+	clearMemoryBarrier.subresourceRange = subResourceRange;
+
+	// Change layout of image to be optimal for clearing
+	vkCmdPipelineBarrier(commandBuffers[index],
+		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+		0, 0, NULL, 0, NULL, 1, &clearMemoryBarrier);
+	vkCmdClearColorImage(commandBuffers[index],
+		swapchainImages[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		&VkClearColorValue({1.0f, 0, 0, 1.0f}), 1, &subResourceRange
+	);
+
+	VkImageMemoryBarrier imageMemoryBarrier = {};
+	imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	imageMemoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+	imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+	imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	imageMemoryBarrier.srcQueueFamilyIndex = familyIndex;
+	imageMemoryBarrier.dstQueueFamilyIndex = familyIndex;
+	imageMemoryBarrier.image = swapchainImages[imageIndex];
+	imageMemoryBarrier.subresourceRange = subResourceRange;
+
+	// Change layout of image to be optimal for presenting
+	vkCmdPipelineBarrier(commandBuffers[index],
+		VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+		0, 0, NULL, 0, NULL, 1, &imageMemoryBarrier);
 }
 
 void CG::Renderer::InitSwapchain()
@@ -84,6 +147,7 @@ void CG::Renderer::InitSwapchain()
 	swapChainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	swapChainCreateInfo.presentMode = presentMode;
 	swapChainCreateInfo.clipped = VK_TRUE;
+	swapChainCreateInfo.pQueueFamilyIndices = nullptr;
 
 	if (vkCreateSwapchainKHR(device, &swapChainCreateInfo, 0, &swapchain) != VK_SUCCESS)
 	{
@@ -91,6 +155,38 @@ void CG::Renderer::InitSwapchain()
 		throw std::runtime_error("Swapchain cannot be created!");
 	}
 
-	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, NULL);
+	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
 	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages);
+}
+
+void CG::Renderer::InitRender()
+{
+	VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+	commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	commandPoolCreateInfo.queueFamilyIndex = familyIndex;
+
+	vkCreateCommandPool(device, &commandPoolCreateInfo, nullptr, &commandPool);
+
+	VkCommandBufferAllocateInfo commandBufferAllocInfo = {};
+	commandBufferAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocInfo.commandPool = commandPool;
+	commandBufferAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocInfo.commandBufferCount = FRAME_COUNT;
+
+	vkAllocateCommandBuffers(device, &commandBufferAllocInfo, commandBuffers);
+
+	VkSemaphoreCreateInfo semaphoreCreateInfo = { VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+
+	vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &imageAvailableSemaphores[0]);
+	vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &imageAvailableSemaphores[1]);
+	vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &renderFinishedSemaphores[0]);
+	vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &renderFinishedSemaphores[1]);
+
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	vkCreateFence(device, &fenceCreateInfo, nullptr, &frameFences[0]);
+	vkCreateFence(device, &fenceCreateInfo, nullptr, &frameFences[1]);
 }

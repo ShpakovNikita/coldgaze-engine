@@ -16,7 +16,6 @@ namespace CG
 		bool is_window_alive();
 		void poll_events();
 		void terminate();
-		void draw();
 
 		int32_t show_message_box(const std::string& title, const std::string& message);
 		eAssertResponse show_assert_box(const char* stacktrace);
