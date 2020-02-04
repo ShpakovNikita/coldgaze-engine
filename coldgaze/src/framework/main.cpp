@@ -3,15 +3,17 @@
 #include <conio.h>
 
 #include "SDL2/SDL.h"
-#include "SystemCore/Application.h"
+#include "core/engine.hpp"
+#include "core/engine_config.hpp"
 
 int main(int argc, char* argv[]) {
-	std::unique_ptr<Application> app = std::make_unique<Application>();
+    CG::engine_config engine_config = { 1280, 720 };
+	CG::engine engine = { engine_config };
 
 	int exec_result;
 	try
 	{
-		app->run();
+		engine.run();
 		exec_result = EXIT_SUCCESS;
 	}
 	catch (const std::runtime_error& e)
