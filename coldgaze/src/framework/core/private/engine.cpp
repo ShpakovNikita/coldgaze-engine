@@ -5,6 +5,7 @@
 #include <vector>
 #include "vulkan/vulkan_core.h"
 #include "SDL2/SDL.h"
+#include <iostream>
 
 
 CG::engine::engine(const CG::engine_config& a_engine_config)
@@ -15,7 +16,7 @@ CG::engine::engine(const CG::engine_config& a_engine_config)
 
 void CG::engine::run()
 {
-    bool is_running = init();
+    is_running = init();
 
     while (is_running)
     {
@@ -32,7 +33,7 @@ bool CG::engine::init()
 
 void CG::engine::main_loop()
 {
-
+    SDL_poll_events();
 }
 
 void CG::engine::cleanup()
@@ -47,7 +48,7 @@ bool CG::engine::init_SDL()
 
 bool CG::engine::init_window()
 {
-    SDL_Window* window = SDL_CreateWindow(
+    window = SDL_CreateWindow(
         "Vulkan_Sample",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         engine_config.width, engine_config.height,
@@ -68,8 +69,10 @@ bool CG::engine::init_graphics_api()
     // TODO: fill this out
 
     std::vector<const char*> layerNames{};
-    // uncomment below if you want to use validation layers
-    // layerNames.push_back("VK_LAYER_LUNARG_standard_validation");
+
+#if ENABLE_VULKAN_VALIDATION
+    layerNames.push_back("VK_LAYER_LUNARG_standard_validation");
+#endif
 
     VkInstanceCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -79,15 +82,11 @@ bool CG::engine::init_graphics_api()
     info.enabledExtensionCount = extensionNames.size();
     info.ppEnabledExtensionNames = extensionNames.data();
 
-    VkResult res;
-    VkInstance instance;
-    res = vkCreateInstance(&info, nullptr, &instance);
-    return res == VK_SUCCESS;
+    return vkCreateInstance(&info, nullptr, &vk_instance) == VK_SUCCESS;
 }
 
 bool CG::engine::init_surface()
 {
-    VkSurfaceKHR surface;
     return SDL_Vulkan_CreateSurface(window, vk_instance, &surface);
 }
 
@@ -96,5 +95,44 @@ void CG::engine::SDL_cleanup()
     SDL_DestroyWindow(window);
 
     SDL_Quit();
+}
+
+void CG::engine::SDL_poll_events()
+{
+    SDL_Event event;
+
+    while (SDL_PollEvent(&event))
+    {
+        switch (event.type)
+        {
+        case SDL_WINDOWEVENT:
+        {
+            // pass
+        }
+        break;
+
+        case SDL_KEYDOWN:
+        {
+            const Uint8* keys = SDL_GetKeyboardState(nullptr);
+
+            if (event.key.keysym.sym == SDLK_ESCAPE) {
+                is_running = false;
+            }
+        }
+        break;
+
+        case SDL_MOUSEBUTTONDOWN: 
+        {
+            // pass
+        }
+        break;
+
+        case SDL_QUIT: 
+        {
+            is_running = false;
+        }
+        break;
+        }
+    }
 }
 

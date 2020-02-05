@@ -24,11 +24,15 @@ namespace CG
         bool init_surface();
 
         void SDL_cleanup();
+        void SDL_poll_events();
 
         const CG::engine_config& engine_config;
 
         SDL_Window* window;
 
         VkInstance vk_instance;
+        VkSurfaceKHR surface;
+
+        bool is_running = false;
     };
 }

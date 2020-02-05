@@ -1,5 +1,7 @@
 #include "stdint.h"
 
+#define ENABLE_VULKAN_VALIDATION 1
+
 namespace CG
 {
     struct engine_config
