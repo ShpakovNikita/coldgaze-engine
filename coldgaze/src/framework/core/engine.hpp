@@ -4,12 +4,12 @@ struct SDL_Window;
 
 namespace CG
 {
-    struct engine_config;
+    struct EngineConfig;
 
-    class engine
+    class Engine
     {
     public:
-        engine(const CG::engine_config& engine_config);
+        Engine(const CG::EngineConfig& engineConfig);
 
         void run();
 
@@ -21,18 +21,19 @@ namespace CG
         bool init_SDL();
         bool init_window();
         bool init_graphics_api();
+        bool setup_debugging();
         bool init_surface();
 
         void SDL_cleanup();
         void SDL_poll_events();
 
-        const CG::engine_config& engine_config;
+        const CG::EngineConfig& engineConfig;
 
         SDL_Window* window;
 
-        VkInstance vk_instance;
+        VkInstance vkInstance;
         VkSurfaceKHR surface;
 
-        bool is_running = false;
+        bool isRunning = false;
     };
 }

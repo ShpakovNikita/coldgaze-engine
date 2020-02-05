@@ -3,12 +3,12 @@
 #include <conio.h>
 
 #include "SDL2/SDL.h"
-#include "core/engine.hpp"
-#include "core/engine_config.hpp"
+#include "Core/Engine.hpp"
+#include "Core/EngineConfig.hpp"
 
 int main(int argc, char* argv[]) {
-    CG::engine_config engine_config = { 1280, 720 };
-	CG::engine engine = { engine_config };
+    CG::EngineConfig engine_config = { 1280, 720 };
+	CG::Engine engine = { engine_config };
 
 	int exec_result;
 	try

@@ -1,24 +1,25 @@
-#include "core/engine.hpp"
-#include "core/engine_config.hpp"
+#include "Core/Engine.hpp"
+#include "Core/EngineConfig.hpp"
 #include "SDL2/SDL_video.h"
 #include "SDL2/SDL_vulkan.h"
 #include <vector>
 #include "vulkan/vulkan_core.h"
 #include "SDL2/SDL.h"
 #include <iostream>
+#include "Utils/Vulkan.hpp"
 
 
-CG::engine::engine(const CG::engine_config& a_engine_config)
-    : engine_config(a_engine_config)
+CG::Engine::Engine(const CG::EngineConfig& a_engine_config)
+    : engineConfig(a_engine_config)
 {
 
 }
 
-void CG::engine::run()
+void CG::Engine::run()
 {
-    is_running = init();
+    isRunning = init();
 
-    while (is_running)
+    while (isRunning)
     {
         main_loop();
     }
@@ -26,39 +27,39 @@ void CG::engine::run()
     cleanup();
 }
 
-bool CG::engine::init()
+bool CG::Engine::init()
 {
     return init_SDL() && init_window() && init_graphics_api() && init_surface();
 }
 
-void CG::engine::main_loop()
+void CG::Engine::main_loop()
 {
     SDL_poll_events();
 }
 
-void CG::engine::cleanup()
+void CG::Engine::cleanup()
 {
 
 }
 
-bool CG::engine::init_SDL()
+bool CG::Engine::init_SDL()
 {
     return SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) >= 0;
 }
 
-bool CG::engine::init_window()
+bool CG::Engine::init_window()
 {
     window = SDL_CreateWindow(
-        "Vulkan_Sample",
+        engineConfig.engine_name.c_str(),
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        engine_config.width, engine_config.height,
+        engineConfig.width, engineConfig.height,
         SDL_WINDOW_VULKAN
     );
 
     return window != nullptr;
 }
 
-bool CG::engine::init_graphics_api()
+bool CG::Engine::init_graphics_api()
 {
     uint32_t extensionCount = 0;
     bool extensions_found = SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, nullptr);
@@ -66,11 +67,15 @@ bool CG::engine::init_graphics_api()
     SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, extensionNames.data());
 
     VkApplicationInfo appInfo{};
-    // TODO: fill this out
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = engineConfig.engine_name.c_str();
+    appInfo.pEngineName = engineConfig.engine_name.c_str();
+    appInfo.apiVersion = engineConfig.vk_api_version;
 
-    std::vector<const char*> layerNames{};
+    std::vector<const char*> layerNames {};
 
 #if ENABLE_VULKAN_VALIDATION
+    extensionNames.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
     layerNames.push_back("VK_LAYER_LUNARG_standard_validation");
 #endif
 
@@ -82,22 +87,32 @@ bool CG::engine::init_graphics_api()
     info.enabledExtensionCount = extensionNames.size();
     info.ppEnabledExtensionNames = extensionNames.data();
 
-    return vkCreateInstance(&info, nullptr, &vk_instance) == VK_SUCCESS;
+    return vkCreateInstance(&info, nullptr, &vkInstance) == VK_SUCCESS;
 }
 
-bool CG::engine::init_surface()
+bool CG::Engine::setup_debugging()
 {
-    return SDL_Vulkan_CreateSurface(window, vk_instance, &surface);
+#if ENABLE_VULKAN_VALIDATION
+    VkDebugReportFlagsEXT debugReportFlags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
+    return CG::VkUtils::Debug::SetupDebugging(vkInstance, debugReportFlags, VK_NULL_HANDLE);
+#endif
+
+    return true;
 }
 
-void CG::engine::SDL_cleanup()
+bool CG::Engine::init_surface()
+{
+    return SDL_Vulkan_CreateSurface(window, vkInstance, &surface);
+}
+
+void CG::Engine::SDL_cleanup()
 {
     SDL_DestroyWindow(window);
 
     SDL_Quit();
 }
 
-void CG::engine::SDL_poll_events()
+void CG::Engine::SDL_poll_events()
 {
     SDL_Event event;
 
@@ -116,7 +131,7 @@ void CG::engine::SDL_poll_events()
             const Uint8* keys = SDL_GetKeyboardState(nullptr);
 
             if (event.key.keysym.sym == SDLK_ESCAPE) {
-                is_running = false;
+                isRunning = false;
             }
         }
         break;
@@ -129,7 +144,7 @@ void CG::engine::SDL_poll_events()
 
         case SDL_QUIT: 
         {
-            is_running = false;
+            isRunning = false;
         }
         break;
         }
