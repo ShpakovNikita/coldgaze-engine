@@ -11,28 +11,34 @@ namespace CG
     public:
         Engine(const CG::EngineConfig& engineConfig);
 
-        void run();
+		virtual void EnableDeviceFeatures();
+
+        void Run();
 
     private:
-        bool init();
-        void main_loop();
-        void cleanup();
+        bool Init();
+        void MainLoop();
+        void Cleanup();
 
-        bool init_SDL();
-        bool init_window();
-        bool init_graphics_api();
-        bool setup_debugging();
-        bool init_surface();
+        bool InitSDL();
+        bool InitWindow();
+        bool InitGraphicsAPI();
+        bool InitSurface();
 
-        void SDL_cleanup();
-        void SDL_poll_events();
+		bool CreateVkInstance();
+		bool SetupDebugging();
+		bool CreateDevices();
+
+        void CleanupSDL();
+        void PollEvents();
 
         const CG::EngineConfig& engineConfig;
 
-        SDL_Window* window;
+        SDL_Window* window = nullptr;
 
-        VkInstance vkInstance;
-        VkSurfaceKHR surface;
+		VkPhysicalDevice vkPhysicalDevice = {};
+		VkInstance vkInstance = {};
+		VkSurfaceKHR surface = {};
 
         bool isRunning = false;
     };
