@@ -1,4 +1,5 @@
 #include "vulkan\vulkan_core.h"
+#include <iostream>
 #include <string>
 
 #if defined(__ANDROID__)
@@ -17,7 +18,7 @@
 	VkResult res = (f);																					\
 	if (res != VK_SUCCESS)																				\
 	{																									\
-		std::cout << "Fatal : VkResult is \"" << CG::VkUtils::Debug::ErrorString(res) << "\" in " << __FILE__ << " at line " << __LINE__ << std::endl; \
+		std::cout << "Fatal : VkResult is \"" << CG::Vk::Debug::ErrorString(res) << "\" in " << __FILE__ << " at line " << __LINE__ << std::endl; \
 		assert(res == VK_SUCCESS);																		\
 	}																									\
 }
@@ -25,7 +26,7 @@
 
 namespace CG
 {
-    namespace VkUtils
+    namespace Vk
     {
         namespace Debug
         {

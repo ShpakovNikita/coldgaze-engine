@@ -4,6 +4,7 @@ struct SDL_Window;
 
 namespace CG
 {
+    namespace Vk { class Device; }
     struct EngineConfig;
 
     class Engine
@@ -11,7 +12,7 @@ namespace CG
     public:
         Engine(const CG::EngineConfig& engineConfig);
 
-		virtual void EnableDeviceFeatures();
+		virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
 
         void Run();
 
@@ -35,6 +36,8 @@ namespace CG
         const CG::EngineConfig& engineConfig;
 
         SDL_Window* window = nullptr;
+        Vk::Device* vkDevice = nullptr;
+        VkQueue queue = {};
 
 		VkPhysicalDevice vkPhysicalDevice = {};
 		VkInstance vkInstance = {};

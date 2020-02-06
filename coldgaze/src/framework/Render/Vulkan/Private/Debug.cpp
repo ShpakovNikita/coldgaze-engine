@@ -1,11 +1,11 @@
-#include "Utils\Vulkan.hpp"
+#include "Render/Vulkan/Debug.hpp"
 #include <string>
 #include <iostream>
 #include <sstream>
 
 namespace CG
 {
-    namespace VkUtils
+    namespace Vk
     {
         namespace Debug
         {

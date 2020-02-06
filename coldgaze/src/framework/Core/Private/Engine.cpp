@@ -6,8 +6,9 @@
 #include "vulkan/vulkan_core.h"
 #include "SDL2/SDL.h"
 #include <iostream>
-#include "Utils/Vulkan.hpp"
+#include "Render/Vulkan/Debug.hpp"
 #include <assert.h>
+#include "Render/Vulkan/Device.hpp"
 
 
 CG::Engine::Engine(const CG::EngineConfig& a_engine_config)
@@ -16,9 +17,9 @@ CG::Engine::Engine(const CG::EngineConfig& a_engine_config)
 	// pass
 }
 
-void CG::Engine::EnableDeviceFeatures()
+VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures()
 {
-	// pass
+	return {};
 }
 
 void CG::Engine::Run()
@@ -45,7 +46,8 @@ void CG::Engine::MainLoop()
 
 void CG::Engine::Cleanup()
 {
-
+	CleanupSDL();
+	delete vkDevice;
 }
 
 bool CG::Engine::InitSDL()
@@ -76,7 +78,7 @@ bool CG::Engine::SetupDebugging()
 {
 #if ENABLE_VULKAN_VALIDATION
     VkDebugReportFlagsEXT debugReportFlags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
-    return CG::VkUtils::Debug::SetupDebugging(vkInstance, debugReportFlags, VK_NULL_HANDLE);
+    return CG::Vk::Debug::SetupDebugging(vkInstance, debugReportFlags, VK_NULL_HANDLE);
 #else
     return true;
 #endif
@@ -132,7 +134,7 @@ bool CG::Engine::CreateDevices()
 					VkPhysicalDeviceProperties deviceProperties;
 					vkGetPhysicalDeviceProperties(physicalDevices[j], &deviceProperties);
 					std::cout << "Device [" << j << "] : " << deviceProperties.deviceName << std::endl;
-					std::cout << " Type: " << CG::VkUtils::Debug::PhysicalDeviceTypeString(deviceProperties.deviceType) << std::endl;
+					std::cout << " Type: " << CG::Vk::Debug::PhysicalDeviceTypeString(deviceProperties.deviceType) << std::endl;
 					std::cout << " API: " << (deviceProperties.apiVersion >> 22) << "." << ((deviceProperties.apiVersion >> 12) & 0x3ff) << "." << (deviceProperties.apiVersion & 0xfff) << std::endl;
 				}
 			}
@@ -145,13 +147,23 @@ bool CG::Engine::CreateDevices()
 	VkPhysicalDeviceFeatures deviceFeatures;
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
 
+    std::vector<const char*> enabledDeviceExtensions;
+	void* deviceCreatepNextChain = nullptr;
+
 	vkPhysicalDevice = physicalDevices[selectedDevice];
 
 	vkGetPhysicalDeviceProperties(vkPhysicalDevice, &deviceProperties);
 	vkGetPhysicalDeviceFeatures(vkPhysicalDevice, &deviceFeatures);
 	vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &deviceMemoryProperties);
 
-	EnableDeviceFeatures();
+	VkPhysicalDeviceFeatures enabledFeatures = GetEnabledDeviceFeatures();
+
+    vkDevice = new CG::Vk::Device(vkPhysicalDevice);
+	VK_CHECK_RESULT(vkDevice->createLogicalDevice(enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain));
+
+    VkDevice device = vkDevice->logicalDevice;
+
+    vkGetDeviceQueue(device, vkDevice->queueFamilyIndices.graphics, 0, &queue);
 
 	return true;
 }
