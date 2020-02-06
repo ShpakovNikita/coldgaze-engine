@@ -159,11 +159,15 @@ bool CG::Engine::CreateDevices()
 	VkPhysicalDeviceFeatures enabledFeatures = GetEnabledDeviceFeatures();
 
     vkDevice = new CG::Vk::Device(vkPhysicalDevice);
-	VK_CHECK_RESULT(vkDevice->createLogicalDevice(enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain));
+	VK_CHECK_RESULT(vkDevice->CreateLogicalDevice(enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain));
 
     VkDevice device = vkDevice->logicalDevice;
 
     vkGetDeviceQueue(device, vkDevice->queueFamilyIndices.graphics, 0, &queue);
+
+	VkFormat depthFormat;
+    VkBool32 validDepthFormat = vkDevice->GetSupportedDepthFormat(vkPhysicalDevice, &depthFormat);
+    assert(validDepthFormat);
 
 	return true;
 }

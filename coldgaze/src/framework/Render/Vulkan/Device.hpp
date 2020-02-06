@@ -57,7 +57,7 @@ namespace CG
 			*
 			* @throw Throws an exception if memTypeFound is null and no memory type could be found that supports the requested properties
 			*/
-			uint32_t getMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties, VkBool32* memTypeFound = nullptr);
+			uint32_t GetMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties, VkBool32* memTypeFound = nullptr);
 
 			/**
 			* Get the index of a queue family that supports the requested queue flags
@@ -68,7 +68,19 @@ namespace CG
 			*
 			* @throw Throws an exception if no queue family index could be found that supports the requested flags
 			*/
-			uint32_t getQueueFamilyIndex(VkQueueFlagBits queueFlags);
+			uint32_t GetQueueFamilyIndex(VkQueueFlagBits queueFlags);
+
+			// TODO: incapsulate in device
+			/**
+            * Selected a suitable supported depth format starting with 32 bit down to 16 bit
+            *
+            * @param physicalDevicePhysical device to be used for format search
+            *
+			* @param depthFormat format that will be filled after successful function execution
+			*
+            * @return False if none of the depth formats in the list is supported by the device
+            */
+			VkBool32 GetSupportedDepthFormat(VkPhysicalDevice physicalDevice, VkFormat* depthFormat);
 
 			/**
 			* Create the logical device based on the assigned physical device, also gets default queue family indices
@@ -80,7 +92,7 @@ namespace CG
 			*
 			* @return VkResult of the device creation call
 			*/
-			VkResult createLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain = true, VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
+			VkResult CreateLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain = true, VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
 
 			/**
 			* Create a buffer on the device
@@ -117,7 +129,7 @@ namespace CG
 			*
 			* @return A handle to the created command buffer
 			*/
-			VkCommandPool createCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+			VkCommandPool CreateCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 
 			/**
 			* Check if an extension is supported by the (physical device)
@@ -126,7 +138,7 @@ namespace CG
 			*
 			* @return True if the extension is supported (present in the list read at device creation time)
 			*/
-			bool extensionSupported(std::string extension);
+			bool ExtensionSupported(std::string extension);
 
 		};
 	}

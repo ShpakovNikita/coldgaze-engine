@@ -48,7 +48,7 @@ CG::Vk::Device::~Device()
     }
 }
 
-uint32_t CG::Vk::Device::getMemoryType(uint32_t typeBits, VkMemoryPropertyFlags aProperties, VkBool32* memTypeFound /*= nullptr*/)
+uint32_t CG::Vk::Device::GetMemoryType(uint32_t typeBits, VkMemoryPropertyFlags aProperties, VkBool32* memTypeFound /*= nullptr*/)
 {
     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
     {
@@ -77,7 +77,7 @@ uint32_t CG::Vk::Device::getMemoryType(uint32_t typeBits, VkMemoryPropertyFlags 
     }
 }
 
-uint32_t CG::Vk::Device::getQueueFamilyIndex(VkQueueFlagBits queueFlags)
+uint32_t CG::Vk::Device::GetQueueFamilyIndex(VkQueueFlagBits queueFlags)
 {
     // Dedicated queue for compute
     // Try to find a queue family index that supports compute but not graphics
@@ -120,7 +120,34 @@ uint32_t CG::Vk::Device::getQueueFamilyIndex(VkQueueFlagBits queueFlags)
     throw std::runtime_error("Could not find a matching queue family index");
 }
 
-VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain /*= true*/, VkQueueFlags requestedQueueTypes /*= VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT*/)
+VkBool32 CG::Vk::Device::GetSupportedDepthFormat(VkPhysicalDevice physicalDevice, VkFormat* depthFormat)
+{
+    // Since all depth formats may be optional, we need to find a suitable depth format to use
+    // Start with the highest precision packed format
+    std::vector<VkFormat> depthFormats = {
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D24_UNORM_S8_UINT,
+        VK_FORMAT_D16_UNORM_S8_UINT,
+        VK_FORMAT_D16_UNORM
+    };
+
+    for (auto& format : depthFormats)
+    {
+        VkFormatProperties formatProps;
+        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProps);
+        // Format must support depth stencil attachment for optimal tiling
+        if (formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        {
+            *depthFormat = format;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+VkResult CG::Vk::Device::CreateLogicalDevice(VkPhysicalDeviceFeatures aEnabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain /*= true*/, VkQueueFlags requestedQueueTypes /*= VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT*/)
 {
     // Desired queues need to be requested upon logical device creation
     // Due to differing queue family configurations of Vulkan implementations this can be a bit tricky, especially if the application
@@ -136,7 +163,7 @@ VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
     // Graphics queue
     if (requestedQueueTypes & VK_QUEUE_GRAPHICS_BIT)
     {
-        queueFamilyIndices.graphics = getQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT);
+        queueFamilyIndices.graphics = GetQueueFamilyIndex(VK_QUEUE_GRAPHICS_BIT);
         VkDeviceQueueCreateInfo queueInfo{};
         queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.queueFamilyIndex = queueFamilyIndices.graphics;
@@ -152,7 +179,7 @@ VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
     // Dedicated compute queue
     if (requestedQueueTypes & VK_QUEUE_COMPUTE_BIT)
     {
-        queueFamilyIndices.compute = getQueueFamilyIndex(VK_QUEUE_COMPUTE_BIT);
+        queueFamilyIndices.compute = GetQueueFamilyIndex(VK_QUEUE_COMPUTE_BIT);
         if (queueFamilyIndices.compute != queueFamilyIndices.graphics)
         {
             // If compute family index differs, we need an additional queue create info for the compute queue
@@ -173,7 +200,7 @@ VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
     // Dedicated transfer queue
     if (requestedQueueTypes & VK_QUEUE_TRANSFER_BIT)
     {
-        queueFamilyIndices.transfer = getQueueFamilyIndex(VK_QUEUE_TRANSFER_BIT);
+        queueFamilyIndices.transfer = GetQueueFamilyIndex(VK_QUEUE_TRANSFER_BIT);
         if ((queueFamilyIndices.transfer != queueFamilyIndices.graphics) && (queueFamilyIndices.transfer != queueFamilyIndices.compute))
         {
             // If compute family index differs, we need an additional queue create info for the compute queue
@@ -216,7 +243,7 @@ VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
     }
 
     // Enable the debug marker extension if it is present (likely meaning a debugging tool is present)
-    if (extensionSupported(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
+    if (ExtensionSupported(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
     {
         deviceExtensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
         enableDebugMarkers = true;
@@ -233,7 +260,7 @@ VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
     if (result == VK_SUCCESS)
     {
         // Create a default command pool for graphics command buffers
-        commandPool = createCommandPool(queueFamilyIndices.graphics);
+        commandPool = CreateCommandPool(queueFamilyIndices.graphics);
     }
 
     enabledFeatures = aEnabledFeatures;
@@ -241,7 +268,7 @@ VkResult CG::Vk::Device::createLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
     return result;
 }
 
-VkCommandPool CG::Vk::Device::createCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags /*= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT*/)
+VkCommandPool CG::Vk::Device::CreateCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags /*= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT*/)
 {
     VkCommandPoolCreateInfo cmdPoolInfo = {};
     cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -252,7 +279,7 @@ VkCommandPool CG::Vk::Device::createCommandPool(uint32_t queueFamilyIndex, VkCom
     return cmdPool;
 }
 
-bool CG::Vk::Device::extensionSupported(std::string extension)
+bool CG::Vk::Device::ExtensionSupported(std::string extension)
 {
     return (std::find(supportedExtensions.begin(), supportedExtensions.end(), extension) != supportedExtensions.end());
 }
