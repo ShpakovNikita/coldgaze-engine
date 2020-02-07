@@ -9,6 +9,7 @@
 #include "Render/Vulkan/Debug.hpp"
 #include <assert.h>
 #include "Render/Vulkan/Device.hpp"
+#include "Render/Vulkan/SwapChain.hpp"
 
 
 CG::Engine::Engine(const CG::EngineConfig& a_engine_config)
@@ -46,8 +47,10 @@ void CG::Engine::MainLoop()
 
 void CG::Engine::Cleanup()
 {
-	CleanupSDL();
+	delete vkSwapChain;
 	delete vkDevice;
+	vkDestroyInstance(vkInstance, nullptr);
+	CleanupSDL();
 }
 
 bool CG::Engine::InitSDL()
@@ -71,7 +74,9 @@ bool CG::Engine::InitGraphicsAPI()
 {
 	return CreateVkInstance() &&
 		SetupDebugging() &&
-		CreateDevices();
+		CreateDevices() && 
+		CreateSwapChain() &&
+		SetupSemaphores();
 }
 
 bool CG::Engine::SetupDebugging()
@@ -97,8 +102,7 @@ bool CG::Engine::CreateDevices()
 
 	// List available GPUs
 	uint32_t selectedDevice = 0;
-
-#if !defined(VK_USE_PLATFORM_ANDROID_KHR)	
+	
 	// GPU selection via command line argument
 	for (size_t i = 0; i < engineConfig.args.size(); ++i)
 	{
@@ -140,7 +144,6 @@ bool CG::Engine::CreateDevices()
 			}
 		}
 	}
-#endif
 
 	// TODO: use later
 	VkPhysicalDeviceProperties deviceProperties;
@@ -168,6 +171,41 @@ bool CG::Engine::CreateDevices()
 	VkFormat depthFormat;
     VkBool32 validDepthFormat = vkDevice->GetSupportedDepthFormat(vkPhysicalDevice, &depthFormat);
     assert(validDepthFormat);
+
+	return true;
+}
+
+bool CG::Engine::CreateSwapChain()
+{
+	VkDevice device = vkDevice->logicalDevice;
+
+    vkSwapChain = new CG::Vk::SwapChain(vkInstance, vkPhysicalDevice, device);
+
+	return true;
+}
+
+bool CG::Engine::SetupSemaphores()
+{
+	VkDevice device = vkDevice->logicalDevice;
+
+    VkSemaphoreCreateInfo semaphoreCreateInfo {};
+    semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    // Create a semaphore used to synchronize image presentation
+	// Ensures that the image is displayed before we start submitting new commands to the queu
+    VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.presentComplete));
+    // Create a semaphore used to synchronize command submission
+    // Ensures that the image is not presented until all commands have been sumbitted and executed
+    VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.renderComplete));
+
+	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submitInfo {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.pWaitDstStageMask = &submitPipelineStages;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &semaphores.presentComplete;
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &semaphores.renderComplete;
 
 	return true;
 }

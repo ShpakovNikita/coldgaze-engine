@@ -120,7 +120,7 @@ uint32_t CG::Vk::Device::GetQueueFamilyIndex(VkQueueFlagBits queueFlags)
     throw std::runtime_error("Could not find a matching queue family index");
 }
 
-VkBool32 CG::Vk::Device::GetSupportedDepthFormat(VkPhysicalDevice physicalDevice, VkFormat* depthFormat)
+VkBool32 CG::Vk::Device::GetSupportedDepthFormat(VkPhysicalDevice aPhysicalDevice, VkFormat* depthFormat)
 {
     // Since all depth formats may be optional, we need to find a suitable depth format to use
     // Start with the highest precision packed format
@@ -135,7 +135,7 @@ VkBool32 CG::Vk::Device::GetSupportedDepthFormat(VkPhysicalDevice physicalDevice
     for (auto& format : depthFormats)
     {
         VkFormatProperties formatProps;
-        vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &formatProps);
+        vkGetPhysicalDeviceFormatProperties(aPhysicalDevice, format, &formatProps);
         // Format must support depth stencil attachment for optimal tiling
         if (formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
         {

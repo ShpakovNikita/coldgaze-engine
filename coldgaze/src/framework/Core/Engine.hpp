@@ -4,7 +4,11 @@ struct SDL_Window;
 
 namespace CG
 {
-    namespace Vk { class Device; }
+    namespace Vk 
+    {
+        class SwapChain;
+        class Device;
+    }
     struct EngineConfig;
 
     class Engine
@@ -29,6 +33,8 @@ namespace CG
 		bool CreateVkInstance();
 		bool SetupDebugging();
 		bool CreateDevices();
+        bool CreateSwapChain();
+        bool SetupSemaphores();
 
         void CleanupSDL();
         void PollEvents();
@@ -37,11 +43,19 @@ namespace CG
 
         SDL_Window* window = nullptr;
         Vk::Device* vkDevice = nullptr;
+        Vk::SwapChain* vkSwapChain = nullptr;
         VkQueue queue = {};
 
 		VkPhysicalDevice vkPhysicalDevice = {};
 		VkInstance vkInstance = {};
 		VkSurfaceKHR surface = {};
+
+        struct {
+            // Swap chain image presentation
+            VkSemaphore presentComplete;
+            // Command buffer submission and execution
+            VkSemaphore renderComplete;
+        } semaphores;
 
         bool isRunning = false;
     };
