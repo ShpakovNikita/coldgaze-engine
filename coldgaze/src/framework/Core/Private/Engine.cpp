@@ -61,6 +61,7 @@ void CG::Engine::MainLoop()
 
 void CG::Engine::Cleanup()
 {
+	DestroyCommandBuffers();
 	delete vkSwapChain;
 	delete vkDevice;
 	vkDestroyInstance(vkInstance, nullptr);
@@ -246,7 +247,17 @@ void CG::Engine::SetupSwapChain()
 
 void CG::Engine::CreateCommandBuffers()
 {
+	VkDevice device = vkDevice->logicalDevice;
 
+	drawCmdBuffers.resize(vkSwapChain->imageCount);
+
+	VkCommandBufferAllocateInfo commandBufferAllocateInfo{};
+	commandBufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferAllocateInfo.commandPool = vkCmdPool;
+	commandBufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferAllocateInfo.commandBufferCount = static_cast<uint32_t>(drawCmdBuffers.size());
+
+	VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &commandBufferAllocateInfo, drawCmdBuffers.data()));
 }
 
 bool CG::Engine::CreateVkInstance()
@@ -289,6 +300,12 @@ void CG::Engine::CleanupSDL()
     SDL_DestroyWindow(window);
 
     SDL_Quit();
+}
+
+void CG::Engine::DestroyCommandBuffers()
+{
+	VkDevice device = vkDevice->logicalDevice;
+	vkFreeCommandBuffers(device, vkCmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
 }
 
 void CG::Engine::PollEvents()

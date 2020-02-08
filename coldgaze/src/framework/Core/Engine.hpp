@@ -1,4 +1,5 @@
 #include "vulkan\vulkan_core.h"
+#include <vector>
 
 struct SDL_Window;
 
@@ -46,6 +47,7 @@ namespace CG
 
 		// Cleanup steps
         void CleanupSDL();
+		void DestroyCommandBuffers();
 
         void PollEvents();
 
@@ -60,6 +62,7 @@ namespace CG
 		VkInstance vkInstance = {};
 		VkSurfaceKHR surface = {};
 		VkCommandPool vkCmdPool = {};
+		std::vector<VkCommandBuffer> drawCmdBuffers;
 
         struct {
             // Swap chain image presentation
