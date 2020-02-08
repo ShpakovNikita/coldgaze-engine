@@ -27,6 +27,11 @@ void CG::Engine::Run()
 {
     isRunning = Init();
 
+	if (isRunning)
+	{
+		Prepare();
+	}
+
     while (isRunning)
     {
         MainLoop();
@@ -37,7 +42,14 @@ void CG::Engine::Run()
 
 bool CG::Engine::Init()
 {
-    return InitSDL() && InitWindow() && InitGraphicsAPI() && InitSurface();
+    return InitSDL() && InitWindow() && InitGraphicsAPI();
+}
+
+void CG::Engine::Prepare()
+{
+	// TODO: read about debug markers
+	InitSwapChain();
+	CreateCommandPool();
 }
 
 void CG::Engine::MainLoop()
@@ -210,9 +222,24 @@ bool CG::Engine::SetupSemaphores()
 	return true;
 }
 
-bool CG::Engine::InitSurface()
+void CG::Engine::InitSwapChain()
 {
-    return SDL_Vulkan_CreateSurface(window, vkInstance, &surface);
+	vkSwapChain->InitSurface(window);
+}
+
+void CG::Engine::CreateCommandPool()
+{
+	VkDevice device = vkDevice->logicalDevice;
+	VkCommandPoolCreateInfo cmdPoolInfo = {};
+	cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	cmdPoolInfo.queueFamilyIndex = vkSwapChain->queueNodeIndex;
+	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &vkCmdPool));
+}
+
+void CG::Engine::SetupSwapChain()
+{
+	vkSwapChain->Create(engineConfig.width, engineConfig.height, engineConfig.vsync);
 }
 
 bool CG::Engine::CreateVkInstance()

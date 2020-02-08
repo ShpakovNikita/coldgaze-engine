@@ -1,5 +1,7 @@
 #include "vulkan\vulkan_core.h"
 
+struct SDL_Window;
+
 namespace CG
 {
     namespace Vk
@@ -8,6 +10,13 @@ namespace CG
         {
         public:
             SwapChain(VkInstance instance, VkPhysicalDevice physicalDevice, VkDevice device);
+			
+			void InitSurface(SDL_Window* window);
+			void Create(uint32_t width, uint32_t height, bool vsync);
+
+			uint32_t queueNodeIndex = UINT32_MAX;
+			VkFormat colorFormat = {};
+			VkColorSpaceKHR colorSpace = {};
 
         private:
             /**

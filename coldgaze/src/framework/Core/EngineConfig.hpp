@@ -11,6 +11,8 @@ namespace CG
         uint32_t width = 1280;
         uint32_t height = 720;
 
+		bool vsync = false;
+
         uint32_t vk_api_version = VK_API_VERSION_1_0;
 
         std::string engine_name = "Coldgaze";

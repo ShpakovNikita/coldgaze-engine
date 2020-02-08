@@ -22,21 +22,30 @@ namespace CG
 
     private:
         bool Init();
+		virtual void Prepare();
         void MainLoop();
         void Cleanup();
 
+		// Init steps
         bool InitSDL();
         bool InitWindow();
         bool InitGraphicsAPI();
-        bool InitSurface();
 
+		// Graphics API steps
 		bool CreateVkInstance();
 		bool SetupDebugging();
 		bool CreateDevices();
         bool CreateSwapChain();
         bool SetupSemaphores();
 
+		// Prepare steps
+		void InitSwapChain();
+		void CreateCommandPool();
+		void SetupSwapChain();
+
+		// Cleanup steps
         void CleanupSDL();
+
         void PollEvents();
 
         const CG::EngineConfig& engineConfig;
@@ -49,13 +58,14 @@ namespace CG
 		VkPhysicalDevice vkPhysicalDevice = {};
 		VkInstance vkInstance = {};
 		VkSurfaceKHR surface = {};
+		VkCommandPool vkCmdPool = {};
 
         struct {
             // Swap chain image presentation
             VkSemaphore presentComplete;
             // Command buffer submission and execution
             VkSemaphore renderComplete;
-        } semaphores;
+		} semaphores = {};
 
         bool isRunning = false;
     };
