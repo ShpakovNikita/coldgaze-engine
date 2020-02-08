@@ -14,7 +14,7 @@ namespace CG
     class Engine
     {
     public:
-        Engine(const CG::EngineConfig& engineConfig);
+        Engine(CG::EngineConfig& engineConfig);
 
 		virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
 
@@ -42,13 +42,14 @@ namespace CG
 		void InitSwapChain();
 		void CreateCommandPool();
 		void SetupSwapChain();
+		void CreateCommandBuffers();
 
 		// Cleanup steps
         void CleanupSDL();
 
         void PollEvents();
 
-        const CG::EngineConfig& engineConfig;
+        CG::EngineConfig& engineConfig;
 
         SDL_Window* window = nullptr;
         Vk::Device* vkDevice = nullptr;

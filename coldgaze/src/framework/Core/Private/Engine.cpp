@@ -12,7 +12,7 @@
 #include "Render/Vulkan/SwapChain.hpp"
 
 
-CG::Engine::Engine(const CG::EngineConfig& a_engine_config)
+CG::Engine::Engine(CG::EngineConfig& a_engine_config)
     : engineConfig(a_engine_config)
 {
 	// pass
@@ -50,6 +50,8 @@ void CG::Engine::Prepare()
 	// TODO: read about debug markers
 	InitSwapChain();
 	CreateCommandPool();
+	SetupSwapChain();
+	CreateCommandBuffers();
 }
 
 void CG::Engine::MainLoop()
@@ -239,7 +241,12 @@ void CG::Engine::CreateCommandPool()
 
 void CG::Engine::SetupSwapChain()
 {
-	vkSwapChain->Create(engineConfig.width, engineConfig.height, engineConfig.vsync);
+	vkSwapChain->Create(&engineConfig.width, &engineConfig.height, engineConfig.vsync);
+}
+
+void CG::Engine::CreateCommandBuffers()
+{
+
 }
 
 bool CG::Engine::CreateVkInstance()
