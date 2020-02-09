@@ -46,6 +46,7 @@ namespace CG
 		void CreateCommandBuffers();
 		void CreateFences();
 		void SetupDepthStencil();
+		void SetupRenderPass();
 
 		// Cleanup steps
         void CleanupSDL();
@@ -66,6 +67,7 @@ namespace CG
 		VkCommandPool vkCmdPool = {};
 		std::vector<VkCommandBuffer> drawCmdBuffers;
 		std::vector<VkFence> waitFences;
+		VkRenderPass renderPass;
 
         struct {
             // Swap chain image presentation
