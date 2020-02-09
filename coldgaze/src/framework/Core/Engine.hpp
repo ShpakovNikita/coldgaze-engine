@@ -44,6 +44,8 @@ namespace CG
 		void CreateCommandPool();
 		void SetupSwapChain();
 		void CreateCommandBuffers();
+		void CreateFences();
+		void SetupDepthStencil();
 
 		// Cleanup steps
         void CleanupSDL();
@@ -63,6 +65,7 @@ namespace CG
 		VkSurfaceKHR surface = {};
 		VkCommandPool vkCmdPool = {};
 		std::vector<VkCommandBuffer> drawCmdBuffers;
+		std::vector<VkFence> waitFences;
 
         struct {
             // Swap chain image presentation
@@ -70,6 +73,13 @@ namespace CG
             // Command buffer submission and execution
             VkSemaphore renderComplete;
 		} semaphores = {};
+
+		struct
+		{
+			VkImage image;
+			VkDeviceMemory mem;
+			VkImageView view;
+		} depthStencil = {};
 
         bool isRunning = false;
     };
