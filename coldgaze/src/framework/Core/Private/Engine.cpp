@@ -56,6 +56,8 @@ void CG::Engine::Prepare()
 	CreateFences();
 	SetupDepthStencil();
 	SetupRenderPass();
+	CreatePipelineCache();
+	SetupFrameBuffer();
 }
 
 void CG::Engine::MainLoop()
@@ -390,6 +392,39 @@ void CG::Engine::SetupRenderPass()
 	renderPassInfo.pDependencies = dependencies.data();
 
 	VK_CHECK_RESULT(vkCreateRenderPass(vkDevice->logicalDevice, &renderPassInfo, nullptr, &renderPass));
+}
+
+void CG::Engine::CreatePipelineCache()
+{
+	VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
+	pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	VK_CHECK_RESULT(vkCreatePipelineCache(vkDevice->logicalDevice, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+}
+
+void CG::Engine::SetupFrameBuffer()
+{
+	VkImageView attachments[2];
+
+	// Depth/Stencil attachment is the same for all frame buffers
+	attachments[1] = depthStencil.view;
+
+	VkFramebufferCreateInfo frameBufferCreateInfo = {};
+	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+	frameBufferCreateInfo.pNext = NULL;
+	frameBufferCreateInfo.renderPass = renderPass;
+	frameBufferCreateInfo.attachmentCount = 2;
+	frameBufferCreateInfo.pAttachments = attachments;
+	frameBufferCreateInfo.width = engineConfig.width;
+	frameBufferCreateInfo.height = engineConfig.height;
+	frameBufferCreateInfo.layers = 1;
+
+	// Create frame buffers for every swap chain image
+	frameBuffers.resize(vkSwapChain->imageCount);
+	for (uint32_t i = 0; i < frameBuffers.size(); i++)
+	{
+		attachments[0] = vkSwapChain->buffers[i].view;
+		VK_CHECK_RESULT(vkCreateFramebuffer(vkDevice->logicalDevice, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
+	}
 }
 
 bool CG::Engine::CreateVkInstance()
