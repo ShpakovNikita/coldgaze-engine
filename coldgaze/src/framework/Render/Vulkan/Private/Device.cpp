@@ -1,7 +1,7 @@
 #include "Render/Vulkan/Device.hpp"
 #include <assert.h>
 #include <stdexcept>
-#include "../Debug.hpp"
+#include "Render/Vulkan/Debug.hpp"
 
 CG::Vk::Device::Device(VkPhysicalDevice physicalDevice)
 {

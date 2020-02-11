@@ -3,14 +3,14 @@
 #include <conio.h>
 
 #include "SDL2/SDL.h"
-#include "Core/Engine.hpp"
 #include "Core/EngineConfig.hpp"
+#include "Core/TriangleEngine.hpp"
 
 int main(int argc, char* argv[]) {
     CG::EngineConfig engine_config = { 1280, 720 };
 	for (size_t i = 0; i < argc; i++) { engine_config.args.push_back(argv[i]); };
 
-	CG::Engine engine = { engine_config };
+	CG::TriangleEngine engine = { engine_config };
 
 	int exec_result;
 	try

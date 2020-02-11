@@ -16,14 +16,49 @@ namespace CG
     {
     public:
         Engine(CG::EngineConfig& engineConfig);
-
-		virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
+        virtual ~Engine() = default;
 
         void Run();
 
+	protected:
+        virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
+        virtual void RenderFrame();
+        virtual void Prepare();
+
+        CG::EngineConfig& engineConfig;
+
+        SDL_Window* window = nullptr;
+        Vk::Device* vkDevice = nullptr;
+        Vk::SwapChain* vkSwapChain = nullptr;
+        VkQueue queue = {};
+
+        VkPhysicalDevice vkPhysicalDevice = {};
+        VkInstance vkInstance = {};
+        VkSurfaceKHR surface = {};
+        VkCommandPool vkCmdPool = {};
+        std::vector<VkCommandBuffer> drawCmdBuffers;
+        std::vector<VkFence> waitFences;
+        VkRenderPass renderPass = {};
+        VkPipelineCache pipelineCache = {};
+        std::vector<VkFramebuffer> frameBuffers;
+        VkSubmitInfo submitInfo = {};
+
+        struct {
+            // Swap chain image presentation
+            VkSemaphore presentComplete;
+            // Command buffer submission and execution
+            VkSemaphore renderComplete;
+        } semaphores = {};
+
+        struct
+        {
+            VkImage image;
+            VkDeviceMemory mem;
+            VkImageView view;
+        } depthStencil = {};
+
     private:
         bool Init();
-		virtual void Prepare();
         void MainLoop();
         void Cleanup();
 
@@ -55,37 +90,6 @@ namespace CG
 		void DestroyCommandBuffers();
 
         void PollEvents();
-
-        CG::EngineConfig& engineConfig;
-
-        SDL_Window* window = nullptr;
-        Vk::Device* vkDevice = nullptr;
-        Vk::SwapChain* vkSwapChain = nullptr;
-        VkQueue queue = {};
-
-		VkPhysicalDevice vkPhysicalDevice = {};
-		VkInstance vkInstance = {};
-		VkSurfaceKHR surface = {};
-		VkCommandPool vkCmdPool = {};
-		std::vector<VkCommandBuffer> drawCmdBuffers;
-		std::vector<VkFence> waitFences;
-		VkRenderPass renderPass;
-		VkPipelineCache pipelineCache;
-		std::vector<VkFramebuffer> frameBuffers;
-
-        struct {
-            // Swap chain image presentation
-            VkSemaphore presentComplete;
-            // Command buffer submission and execution
-            VkSemaphore renderComplete;
-		} semaphores = {};
-
-		struct
-		{
-			VkImage image;
-			VkDeviceMemory mem;
-			VkImageView view;
-		} depthStencil = {};
 
         bool isRunning = false;
     };

@@ -24,6 +24,11 @@ VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures()
 	return {};
 }
 
+void CG::Engine::RenderFrame()
+{
+
+}
+
 void CG::Engine::Run()
 {
     isRunning = Init();
@@ -63,6 +68,7 @@ void CG::Engine::Prepare()
 void CG::Engine::MainLoop()
 {
     PollEvents();
+	RenderFrame();
 }
 
 void CG::Engine::Cleanup()
@@ -220,7 +226,7 @@ bool CG::Engine::SetupSemaphores()
     VK_CHECK_RESULT(vkCreateSemaphore(device, &semaphoreCreateInfo, nullptr, &semaphores.renderComplete));
 
 	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo submitInfo {};
+    submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.pWaitDstStageMask = &submitPipelineStages;
     submitInfo.waitSemaphoreCount = 1;

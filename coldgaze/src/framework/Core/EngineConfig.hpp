@@ -1,6 +1,7 @@
 #include "stdint.h"
 #include <string>
 #include <vector>
+#include "vulkan\vulkan_core.h"
 
 #define ENABLE_VULKAN_VALIDATION 1
 

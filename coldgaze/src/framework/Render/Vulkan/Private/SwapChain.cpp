@@ -3,7 +3,7 @@
 #include "SDL2/SDL_vulkan.h"
 #include <assert.h>
 #include <vector>
-#include "../Debug.hpp"
+#include "Render/Vulkan/Debug.hpp"
 
 #define GET_INSTANCE_PROC_ADDR(inst, entrypoint)                        \
 {                                                                       \
