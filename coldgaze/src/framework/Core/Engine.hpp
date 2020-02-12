@@ -42,6 +42,7 @@ namespace CG
         VkPipelineCache pipelineCache = {};
         std::vector<VkFramebuffer> frameBuffers;
         VkSubmitInfo submitInfo = {};
+		VkPhysicalDeviceMemoryProperties deviceMemoryProperties = {};
 
         struct {
             // Swap chain image presentation

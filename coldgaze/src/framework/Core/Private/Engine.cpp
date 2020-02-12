@@ -175,7 +175,6 @@ bool CG::Engine::CreateDevices()
 	// TODO: use later
 	VkPhysicalDeviceProperties deviceProperties;
 	VkPhysicalDeviceFeatures deviceFeatures;
-	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
 
     std::vector<const char*> enabledDeviceExtensions;
 	void* deviceCreatepNextChain = nullptr;

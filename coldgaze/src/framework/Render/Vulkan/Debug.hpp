@@ -1,6 +1,7 @@
 #include "vulkan\vulkan_core.h"
 #include <iostream>
 #include <string>
+#include <cassert>
 
 #if defined(__ANDROID__)
 #define VK_CHECK_RESULT(f)																				\
