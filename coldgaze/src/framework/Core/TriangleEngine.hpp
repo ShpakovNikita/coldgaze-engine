@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include <glm/glm.hpp>
 #include "vulkan/vulkan_core.h"
 
 namespace CG { struct EngineConfig; }
@@ -15,7 +16,16 @@ namespace CG
         void Prepare() override;
 
     private:
+		VkCommandBuffer GetReadyCommandBuffer();
+		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
+
+        // TODO: move to camera or something like that
+        void UpdateUniformBuffers();
+
         void PrepareVertices();
+		void PrepareUniformBuffers();
+        void SetupDescriptorSetLayout();
+
 		uint32_t CG::TriangleEngine::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties);
 
 		// Vertex buffer and attributes
@@ -31,5 +41,23 @@ namespace CG
 			VkBuffer buffer;
 			uint32_t count;
 		} indices = {};
+
+        struct {
+            VkDeviceMemory memory;
+            VkBuffer buffer;
+            VkDescriptorBufferInfo descriptor;
+        }  uniformBufferVS = {};
+
+        // TODO: move to camera or something like that
+        struct {
+            glm::mat4 projectionMatrix;
+            glm::mat4 modelMatrix;
+            glm::mat4 viewMatrix;
+		} uboVS = {};
+
+        glm::vec3 rotation = glm::vec3();
+        glm::vec3 cameraPos = glm::vec3();
+
+        float zoom = 0;
     };
 }
