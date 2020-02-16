@@ -381,7 +381,7 @@ void CG::TriangleEngine::PreparePipelines()
 	vertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexInputAttributs.size());
 	vertexInputState.pVertexAttributeDescriptions = vertexInputAttributs.data();
 
-	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
+	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
 	// Vertex shader
 	shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -398,7 +398,7 @@ void CG::TriangleEngine::PreparePipelines()
 	// Load binary SPIR-V shader
 	shaderStages[1].module = LoadSPIRVShader(GetAssetPath() + "shaders/compiled/triangle.frag.spv");
 	// Main entry point for the shader
-	shaderStages[1].pName = "main";
+	shaderStages[1].pName = "main";  
 	assert(shaderStages[1].module != VK_NULL_HANDLE);
 
 	pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
