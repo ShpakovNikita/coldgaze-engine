@@ -11,6 +11,7 @@
 #include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/SwapChain.hpp"
 #include <array>
+#include <fstream>
 
 
 CG::Engine::Engine(CG::EngineConfig& a_engine_config)
@@ -63,6 +64,53 @@ void CG::Engine::Prepare()
 	SetupRenderPass();
 	CreatePipelineCache();
 	SetupFrameBuffer();
+}
+
+VkShaderModule CG::Engine::LoadSPIRVShader(const std::string& filename) const
+{
+	VkDevice device = vkDevice->logicalDevice;
+
+	size_t shaderSize = 0;
+	char* shaderCode = nullptr;
+
+	std::ifstream is(filename, std::ios::binary | std::ios::in | std::ios::ate);
+
+	if (is.is_open())
+	{
+		shaderSize = is.tellg();
+		is.seekg(0, std::ios::beg);
+		shaderCode = new char[shaderSize];
+		is.read(shaderCode, shaderSize);
+		is.close();
+		assert(shaderSize > 0);
+	}
+
+	if (shaderCode)
+	{
+		VkShaderModuleCreateInfo moduleCreateInfo{};
+		moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		moduleCreateInfo.codeSize = shaderSize;
+		moduleCreateInfo.pCode = (uint32_t*)shaderCode;
+
+		VkShaderModule shaderModule;
+		VK_CHECK_RESULT(vkCreateShaderModule(device, &moduleCreateInfo, nullptr, &shaderModule));
+
+		delete[] shaderCode;
+
+		return shaderModule;
+	}
+
+	std::cerr << "Error: Could not open shader file \"" << filename << "\"" << std::endl;
+	return VK_NULL_HANDLE;
+}
+
+const std::string CG::Engine::GetAssetPath() const
+{
+#if defined(VK_EXAMPLE_ASSETS_DIR)
+	return VK_EXAMPLE_ASSETS_DIR;
+#else
+	return "./../assets/";
+#endif
 }
 
 void CG::Engine::MainLoop()

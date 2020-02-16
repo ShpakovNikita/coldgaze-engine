@@ -1,5 +1,6 @@
 #include "vulkan\vulkan_core.h"
 #include <vector>
+#include <string>
 
 struct SDL_Window;
 
@@ -24,6 +25,9 @@ namespace CG
         virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
         virtual void RenderFrame();
         virtual void Prepare();
+
+		VkShaderModule LoadSPIRVShader(const std::string& filename) const;
+		const std::string GetAssetPath() const;
 
         CG::EngineConfig& engineConfig;
 

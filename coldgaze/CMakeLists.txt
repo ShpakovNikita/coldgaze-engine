@@ -95,10 +95,10 @@ endif()
 
 
 if(RESOURCE_INSTALL_DIR)
-	add_definitions(-DVK_EXAMPLE_DATA_DIR=\"${RESOURCE_INSTALL_DIR}/\")
-	install(DIRECTORY data/ DESTINATION ${RESOURCE_INSTALL_DIR}/)
+	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${RESOURCE_INSTALL_DIR}/\")
+	install(DIRECTORY assets/ DESTINATION ${RESOURCE_INSTALL_DIR}/)
 else()
-	add_definitions(-DVK_EXAMPLE_DATA_DIR=\"${CMAKE_SOURCE_DIR}/data/\")
+	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${CMAKE_SOURCE_DIR}/assets/\")
 endif()
 
 # Compiler specific stuff

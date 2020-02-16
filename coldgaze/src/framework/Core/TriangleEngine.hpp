@@ -51,6 +51,7 @@ namespace CG
 
 		VkPipelineLayout pipelineLayout = {};
 		VkDescriptorSetLayout descriptorSetLayout = {};
+		VkPipeline pipeline = {};
 
         // TODO: move to camera or something like that
         struct {
