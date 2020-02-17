@@ -26,6 +26,7 @@ namespace CG
 		void PrepareUniformBuffers();
         void SetupDescriptorSetLayout();
 		void PreparePipelines();
+		void SetupDescriptorPool();
 
 		uint32_t CG::TriangleEngine::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties);
 
@@ -52,6 +53,8 @@ namespace CG
 		VkPipelineLayout pipelineLayout = {};
 		VkDescriptorSetLayout descriptorSetLayout = {};
 		VkPipeline pipeline = {};
+		VkDescriptorSet descriptorSet = {};
+		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
         // TODO: move to camera or something like that
         struct {
