@@ -35,6 +35,7 @@ void CG::TriangleEngine::Prepare()
 	SetupDescriptorSetLayout();
 	PreparePipelines();
 	SetupDescriptorPool();
+	BuildCommandBuffers();
 }
 
 uint32_t CG::TriangleEngine::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties)
@@ -459,4 +460,60 @@ void CG::TriangleEngine::SetupDescriptorPool()
 	writeDescriptorSet.dstBinding = 0;
 
 	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, nullptr);
+}
+
+void CG::TriangleEngine::BuildCommandBuffers()
+{
+	VkCommandBufferBeginInfo cmdBufInfo = {};
+	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBufInfo.pNext = nullptr;
+
+	VkClearValue clearValues[2];
+	clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 1.0f } };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo renderPassBeginInfo = {};
+	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassBeginInfo.pNext = nullptr;
+	renderPassBeginInfo.renderPass = renderPass;
+	renderPassBeginInfo.renderArea.offset.x = 0;
+	renderPassBeginInfo.renderArea.offset.y = 0;
+	renderPassBeginInfo.renderArea.extent.width = engineConfig.width;
+	renderPassBeginInfo.renderArea.extent.height = engineConfig.height;
+	renderPassBeginInfo.clearValueCount = 2;
+	renderPassBeginInfo.pClearValues = clearValues;
+
+	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
+	{
+		renderPassBeginInfo.framebuffer = frameBuffers[i];
+
+		VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
+		vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport = {};
+		viewport.height = static_cast<float>(engineConfig.height);
+		viewport.width = static_cast<float>(engineConfig.width);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+
+		VkRect2D scissor = {};
+		scissor.extent.width = engineConfig.width;
+		scissor.extent.height = engineConfig.height;
+		scissor.offset.x = 0;
+		scissor.offset.y = 0;
+		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+		VkDeviceSize offsets[1] = { 0 };
+		vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &vertices.buffer, offsets);
+		vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
+
+		vkCmdEndRenderPass(drawCmdBuffers[i]);
+
+		VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
+	}
 }

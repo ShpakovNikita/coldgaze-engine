@@ -27,6 +27,7 @@ namespace CG
         void SetupDescriptorSetLayout();
 		void PreparePipelines();
 		void SetupDescriptorPool();
+		void BuildCommandBuffers();
 
 		uint32_t CG::TriangleEngine::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties);
 
