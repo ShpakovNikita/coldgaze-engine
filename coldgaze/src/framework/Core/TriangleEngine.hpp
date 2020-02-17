@@ -56,6 +56,8 @@ namespace CG
 		VkPipeline pipeline = {};
 		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+		// active frame buffer index
+		uint32_t currentBuffer = 0;
 
         // TODO: move to camera or something like that
         struct {

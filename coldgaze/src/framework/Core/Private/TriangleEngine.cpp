@@ -6,6 +6,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <array>
 #include <stddef.h>
+#include "Render\Vulkan\SwapChain.hpp"
 
 constexpr uint64_t DEFAULT_FENCE_TIMEOUT = 100000000000;
 constexpr float DEFAULT_FOV = 60.0f;
@@ -24,7 +25,28 @@ CG::TriangleEngine::TriangleEngine(CG::EngineConfig& engineConfig)
 
 void CG::TriangleEngine::RenderFrame()
 {
+	VkDevice device = vkDevice->logicalDevice;
 
+	VK_CHECK_RESULT(vkSwapChain->AcquireNextImage(semaphores.presentComplete, &currentBuffer));
+
+	VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
+	VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentBuffer]));
+
+	// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
+	VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+	VkSubmitInfo localSubmitInfo = {};
+	localSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	localSubmitInfo.pWaitDstStageMask = &waitStageMask;
+	localSubmitInfo.pWaitSemaphores = &semaphores.presentComplete;
+	localSubmitInfo.waitSemaphoreCount = 1;
+	localSubmitInfo.pSignalSemaphores = &semaphores.renderComplete;
+	localSubmitInfo.signalSemaphoreCount = 1;
+	localSubmitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
+	localSubmitInfo.commandBufferCount = 1;
+
+	VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &localSubmitInfo, waitFences[currentBuffer]));
+	VK_CHECK_RESULT(vkSwapChain->QueuePresent(queue, currentBuffer, semaphores.renderComplete));
 }
 
 void CG::TriangleEngine::Prepare()

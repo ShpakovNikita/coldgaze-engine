@@ -30,6 +30,29 @@ namespace CG
 			*/
 			void Create(uint32_t* width, uint32_t* height, bool vsync);
 
+			/**
+			* Queue an image for presentation
+			*
+			* @param queue Presentation queue for presenting the image
+			* @param imageIndex Index of the swapchain image to queue for presentation
+			* @param waitSemaphore (Optional) Semaphore that is waited on before the image is presented (only used if != VK_NULL_HANDLE)
+			*
+			* @return VkResult of the queue presentation
+			*/
+			VkResult QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore);
+
+			/**
+			* Acquires the next image in the swap chain
+			*
+			* @param presentCompleteSemaphore (Optional) Semaphore that is signaled when the image is ready for use
+			* @param imageIndex Pointer to the image index that will be increased if the next image could be acquired
+			*
+			* @note The function will always wait until the next image has been acquired by setting timeout to UINT64_MAX
+			*
+			* @return VkResult of the image acquisition
+			*/
+			VkResult AcquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex);
+
 			uint32_t queueNodeIndex = UINT32_MAX;
 			VkFormat colorFormat = {};
 			VkColorSpaceKHR colorSpace = {};

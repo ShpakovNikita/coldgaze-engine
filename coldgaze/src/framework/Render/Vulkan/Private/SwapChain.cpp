@@ -276,6 +276,25 @@ void CG::Vk::SwapChain::Create(uint32_t* width, uint32_t* height, bool vsync)
 	}
 }
 
+VkResult CG::Vk::SwapChain::QueuePresent(VkQueue queue, uint32_t imageIndex, VkSemaphore waitSemaphore)
+{
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.pNext = NULL;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapChain;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pWaitSemaphores = &waitSemaphore;
+	presentInfo.waitSemaphoreCount = 1;
+
+	return fpQueuePresentKHR(queue, &presentInfo);
+}
+
+VkResult CG::Vk::SwapChain::AcquireNextImage(VkSemaphore presentCompleteSemaphore, uint32_t* imageIndex)
+{
+	return fpAcquireNextImageKHR(device, swapChain, UINT64_MAX, presentCompleteSemaphore, (VkFence)nullptr, imageIndex);
+}
+
 void CG::Vk::SwapChain::Connect(VkInstance aInstance, VkPhysicalDevice aPhysicalDevice, VkDevice aDevice)
 {
     instance = aInstance;
