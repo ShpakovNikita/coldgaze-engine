@@ -2,6 +2,9 @@
 #include <vector>
 #include <string>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 struct SDL_Window;
 
 namespace CG
@@ -93,6 +96,8 @@ namespace CG
 		// Cleanup steps
         void CleanupSDL();
 		void DestroyCommandBuffers();
+
+		bool CheckValidationLayersSupport();
 
         void PollEvents();
 

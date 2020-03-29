@@ -104,6 +104,8 @@ void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 
     assert(commandBuffer != VK_NULL_HANDLE);
 
+	VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+
     VkSubmitInfo queueSubmitInfo = {};
     queueSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     queueSubmitInfo.commandBufferCount = 1;
@@ -120,8 +122,6 @@ void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
     VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &queueSubmitInfo, fence));
     // Wait for the fence to signal that command buffer has finished executing
     VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
-
-    VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 
     vkDestroyFence(device, fence, nullptr);
     vkFreeCommandBuffers(device, vkCmdPool, 1, &commandBuffer);
@@ -231,11 +231,6 @@ void CG::TriangleEngine::PrepareVertices()
 	VK_CHECK_RESULT(vkBindBufferMemory(device, indices.buffer, indices.memory, 0));
 
 	VkCommandBuffer copyCmd = GetReadyCommandBuffer();
-
-	// start using command buffers
-	VkCommandBufferBeginInfo cmdBufferBeginInfo{};
-	cmdBufferBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufferBeginInfo));
 
 	// Vertex buffer
 	VkBufferCopy copyRegion = {};

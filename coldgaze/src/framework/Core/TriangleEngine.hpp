@@ -69,6 +69,6 @@ namespace CG
         glm::vec3 rotation = glm::vec3();
         glm::vec3 cameraPos = glm::vec3();
 
-        float zoom = 0;
+        float zoom = -2.5f;
     };
 }

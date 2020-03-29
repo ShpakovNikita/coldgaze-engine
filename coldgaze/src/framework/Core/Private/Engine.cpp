@@ -13,6 +13,10 @@
 #include <array>
 #include <fstream>
 
+const std::vector<const char*> validationLayers = {
+	"VK_LAYER_LUNARG_standard_validation",
+	"VK_LAYER_KHRONOS_validation",
+};
 
 CG::Engine::Engine(CG::EngineConfig& a_engine_config)
     : engineConfig(a_engine_config)
@@ -482,6 +486,12 @@ void CG::Engine::SetupFrameBuffer()
 
 bool CG::Engine::CreateVkInstance()
 {
+#if ENABLE_VULKAN_VALIDATION
+	if (!CheckValidationLayersSupport())
+	{
+		std::cerr << "Validation enabled but not all requested layers are available" << std::endl;
+	}
+#endif
 	uint32_t extensionCount = 0;
 	if (!SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, nullptr))
 	{
@@ -501,7 +511,7 @@ bool CG::Engine::CreateVkInstance()
 
 #if ENABLE_VULKAN_VALIDATION
 	extensionNames.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-	layerNames.push_back("VK_LAYER_LUNARG_standard_validation");
+	layerNames = validationLayers;
 #endif
 
 	VkInstanceCreateInfo info{};
@@ -526,6 +536,32 @@ void CG::Engine::DestroyCommandBuffers()
 {
 	VkDevice device = vkDevice->logicalDevice;
 	vkFreeCommandBuffers(device, vkCmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
+}
+
+bool CG::Engine::CheckValidationLayersSupport()
+{
+	uint32_t layerCount;
+	vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+	std::vector<VkLayerProperties> availableLayers(layerCount);
+	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+	for (const char* layerName : validationLayers) {
+		bool layerFound = false;
+
+		for (const auto& layerProperties : availableLayers) {
+			if (strcmp(layerName, layerProperties.layerName) == 0) {
+				layerFound = true;
+				break;
+			}
+		}
+
+		if (!layerFound) {
+			return false;
+		}
+	}
+
+	return true;
 }
 
 void CG::Engine::PollEvents()
