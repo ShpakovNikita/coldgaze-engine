@@ -7,3 +7,6 @@
 [submodule "coldgaze/include/imgui"]
 	path = coldgaze/include/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "coldgaze/include/tinygltf"]
+	path = coldgaze/include/tinygltf
+	url = https://github.com/syoyo/tinygltf.git

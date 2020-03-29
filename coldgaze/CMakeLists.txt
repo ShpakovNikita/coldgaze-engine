@@ -72,6 +72,9 @@ endif()
 include_directories("include")
 include_directories("include/glm")
 include_directories("include/entt/src")
+ 
+include_directories("include/tinygltf")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTINYGLTF_USE_CPP14")
 
 # Set preprocessor defines
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX -D_USE_MATH_DEFINES ")
