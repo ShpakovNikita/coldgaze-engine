@@ -14,6 +14,7 @@
 #include <fstream>
 #include "ECS/ICGSystem.hpp"
 #include <chrono>
+#include "SDL2/SDL_events.h"
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -54,7 +55,7 @@ void CG::Engine::Run()
 		auto currentTime = std::chrono::steady_clock::now();
 		auto elapsedTime = currentTime - previousTime;
 
-		float deltaTime = elapsedTime.count() / (1000.0f * 1000.0f * 1000.0f * 1000.0f);
+		float deltaTime = elapsedTime.count() / (1000.0f * 1000.0f * 1000.0f);
 
         MainLoop(deltaTime);
 
@@ -137,7 +138,7 @@ const std::string CG::Engine::GetAssetPath() const
 
 void CG::Engine::MainLoop(float deltaTime)
 {
-    PollEvents();
+    PollEvents(deltaTime);
 	UpdateSystems(deltaTime);
 	RenderFrame();
 }
@@ -149,6 +150,38 @@ void CG::Engine::Cleanup()
 	delete vkDevice;
 	vkDestroyInstance(vkInstance, nullptr);
 	CleanupSDL();
+}
+
+void CG::Engine::HandleSystemInput(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_WINDOWEVENT:
+	{
+		// pass
+	}
+	break;
+
+	case SDL_KEYDOWN:
+	{
+		if (event.key.keysym.sym == SDLK_ESCAPE) {
+			isRunning = false;
+		}
+	}
+	break;
+
+	case SDL_MOUSEBUTTONDOWN:
+	{
+		// pass
+	}
+	break;
+
+	case SDL_QUIT:
+	{
+		isRunning = false;
+	}
+	break;
+	}
 }
 
 bool CG::Engine::InitSDL()
@@ -583,40 +616,18 @@ bool CG::Engine::CheckValidationLayersSupport()
 	return true;
 }
 
-void CG::Engine::PollEvents()
+void CG::Engine::PollEvents(float deltaTime)
 {
     SDL_Event event;
 
     while (SDL_PollEvent(&event))
     {
-        switch (event.type)
-        {
-        case SDL_WINDOWEVENT:
-        {
-            // pass
-        }
-        break;
+		HandleSystemInput(event);
 
-        case SDL_KEYDOWN:
-        {
-            if (event.key.keysym.sym == SDLK_ESCAPE) {
-                isRunning = false;
-            }
-        }
-        break;
-
-        case SDL_MOUSEBUTTONDOWN: 
-        {
-            // pass
-        }
-        break;
-
-        case SDL_QUIT: 
-        {
-            isRunning = false;
-        }
-        break;
-        }
+		for (auto& system : systems)
+		{
+			system->InputUpdate(deltaTime, registry, event);
+		}
     }
 }
 

@@ -11,6 +11,7 @@
 
 struct SDL_Window;
 class ICGSystem;
+union SDL_Event;
 
 namespace CG
 {
@@ -81,6 +82,8 @@ namespace CG
         void MainLoop(float deltaTime);
         void Cleanup();
 
+		void HandleSystemInput(const SDL_Event& event);
+
 		// Init steps
         bool InitSDL();
         bool InitWindow();
@@ -110,7 +113,7 @@ namespace CG
 
 		bool CheckValidationLayersSupport();
 
-        void PollEvents();
+        void PollEvents(float deltaTime);
 
 		bool SetupDependencies();
 		void UpdateSystems(float deltaTime);
