@@ -1,8 +1,16 @@
+#pragma once
 #include "engine.hpp"
 #include <glm/glm.hpp>
 #include "vulkan/vulkan_core.h"
 
-namespace CG { struct EngineConfig; }
+namespace CG 
+{
+	namespace Vk 
+	{
+		struct UniformBufferVS;
+	}
+	struct EngineConfig; 
+}
 
 namespace CG
 {
@@ -19,37 +27,30 @@ namespace CG
 		VkCommandBuffer GetReadyCommandBuffer();
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
 
-        // TODO: move to camera or something like that
-        void UpdateUniformBuffers();
-
         void PrepareVertices();
-		void PrepareUniformBuffers();
         void SetupDescriptorSetLayout();
 		void PreparePipelines();
 		void SetupDescriptorPool();
 		void BuildCommandBuffers();
 
-		uint32_t CG::TriangleEngine::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties);
+		void SetupCamera();
 
 		// Vertex buffer and attributes
-		struct {
+		struct 
+		{
 			VkDeviceMemory memory;	 // Handle to the device memory for this buffer
 			VkBuffer buffer;		 // Handle to the Vulkan buffer object that the memory is bound to
 		} vertices = {};
 
 		// Index buffer
-		struct
+		struct 
 		{
 			VkDeviceMemory memory;
 			VkBuffer buffer;
 			uint32_t count;
 		} indices = {};
 
-        struct {
-            VkDeviceMemory memory;
-            VkBuffer buffer;
-            VkDescriptorBufferInfo descriptor;
-        }  uniformBufferVS = {};
+		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
 		VkPipelineLayout pipelineLayout = {};
 		VkDescriptorSetLayout descriptorSetLayout = {};
@@ -58,17 +59,5 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		// active frame buffer index
 		uint32_t currentBuffer = 0;
-
-        // TODO: move to camera or something like that
-        struct {
-            glm::mat4 projectionMatrix;
-            glm::mat4 modelMatrix;
-            glm::mat4 viewMatrix;
-		} uboVS = {};
-
-        glm::vec3 rotation = glm::vec3();
-        glm::vec3 cameraPos = glm::vec3();
-
-        float zoom = -2.5f;
     };
 }

@@ -59,7 +59,7 @@ namespace CG
 			*
 			* @throw Throws an exception if memTypeFound is null and no memory type could be found that supports the requested properties
 			*/
-			uint32_t GetMemoryType(uint32_t typeBits, VkMemoryPropertyFlags properties, VkBool32* memTypeFound = nullptr);
+			uint32_t GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties, VkBool32* memTypeFound = nullptr);
 
 			/**
 			* Get the index of a queue family that supports the requested queue flags

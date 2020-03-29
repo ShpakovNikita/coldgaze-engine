@@ -12,6 +12,8 @@
 #include "Render/Vulkan/SwapChain.hpp"
 #include <array>
 #include <fstream>
+#include "ECS/ICGSystem.hpp"
+#include <chrono>
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -23,6 +25,8 @@ CG::Engine::Engine(CG::EngineConfig& a_engine_config)
 {
 	// pass
 }
+
+CG::Engine::~Engine() = default;
 
 VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures()
 {
@@ -41,19 +45,33 @@ void CG::Engine::Run()
 	if (isRunning)
 	{
 		Prepare();
+
+		previousTime = std::chrono::steady_clock::now();
 	}
 
     while (isRunning)
-    {
-        MainLoop();
+	{
+		auto currentTime = std::chrono::steady_clock::now();
+		auto elapsedTime = currentTime - previousTime;
+
+		float deltaTime = elapsedTime.count() / (1000.0f * 1000.0f * 1000.0f * 1000.0f);
+
+        MainLoop(deltaTime);
+
+		previousTime = currentTime;
     }
     
     Cleanup();
 }
 
+entt::registry& CG::Engine::GetRegistry()
+{
+	return registry;
+}
+
 bool CG::Engine::Init()
 {
-    return InitSDL() && InitWindow() && InitGraphicsAPI();
+    return SetupDependencies() && InitSDL() && InitWindow() && InitGraphicsAPI();
 }
 
 void CG::Engine::Prepare()
@@ -117,9 +135,10 @@ const std::string CG::Engine::GetAssetPath() const
 #endif
 }
 
-void CG::Engine::MainLoop()
+void CG::Engine::MainLoop(float deltaTime)
 {
     PollEvents();
+	UpdateSystems(deltaTime);
 	RenderFrame();
 }
 
@@ -359,7 +378,7 @@ void CG::Engine::SetupDepthStencil()
 	VkMemoryAllocateInfo memAllloc{};
 	memAllloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	memAllloc.allocationSize = memReqs.size;
-	memAllloc.memoryTypeIndex = vkDevice->GetMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+	memAllloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK_RESULT(vkAllocateMemory(device, &memAllloc, nullptr, &depthStencil.mem));
 	VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil.image, depthStencil.mem, 0));
 
@@ -599,5 +618,18 @@ void CG::Engine::PollEvents()
         break;
         }
     }
+}
+
+bool CG::Engine::SetupDependencies()
+{
+	return true;
+}
+
+void CG::Engine::UpdateSystems(float deltaTime)
+{
+	for (auto &system : systems)
+	{
+		system->Update(deltaTime, registry);
+	}
 }
 

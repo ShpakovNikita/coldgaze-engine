@@ -1,11 +1,16 @@
+#pragma once
 #include "vulkan\vulkan_core.h"
+#include <entt/entt.hpp>
 #include <vector>
 #include <string>
+#include <chrono>
+#include <memory>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 struct SDL_Window;
+class ICGSystem;
 
 namespace CG
 {
@@ -20,9 +25,11 @@ namespace CG
     {
     public:
         Engine(CG::EngineConfig& engineConfig);
-        virtual ~Engine() = default;
+		virtual ~Engine();
 
         void Run();
+
+		entt::registry& GetRegistry();
 
 	protected:
         virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
@@ -65,9 +72,13 @@ namespace CG
             VkImageView view;
         } depthStencil = {};
 
+		// TODO: move inside scene class
+		entt::registry registry;
+		std::vector<std::unique_ptr<ICGSystem>> systems;
+
     private:
         bool Init();
-        void MainLoop();
+        void MainLoop(float deltaTime);
         void Cleanup();
 
 		// Init steps
@@ -101,6 +112,10 @@ namespace CG
 
         void PollEvents();
 
+		bool SetupDependencies();
+		void UpdateSystems(float deltaTime);
+
         bool isRunning = false;
+		std::chrono::time_point<std::chrono::steady_clock> previousTime;
     };
 }
