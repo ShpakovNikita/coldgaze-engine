@@ -1,4 +1,4 @@
-#include "CameraSystem.hpp"
+#include "ECS/Systems/CameraSystem.hpp"
 #include "ECS/Components/CameraComponent.hpp"
 #include "entt/entity/registry.hpp"
 #include "glm/ext/matrix_clip_space.inl"
