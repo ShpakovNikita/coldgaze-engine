@@ -3,6 +3,8 @@
 #include <glm/glm.hpp>
 #include "vulkan/vulkan_core.h"
 
+namespace CG { namespace Vk { class ImGuiImpl; } }
+
 namespace CG 
 {
 	namespace Vk 
@@ -18,13 +20,15 @@ namespace CG
     {
     public:
         TriangleEngine(CG::EngineConfig& engineConfig);
+		virtual ~TriangleEngine();
 
     protected:
         void RenderFrame() override;
         void Prepare() override;
+		void Cleanup() override;
 
     private:
-		VkCommandBuffer GetReadyCommandBuffer();
+		VkCommandBuffer GetReadyCommandBuffer(); 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
 
         void PrepareVertices();
@@ -34,6 +38,7 @@ namespace CG
 		void BuildCommandBuffers();
 
 		void SetupCamera();
+		void PrepareImgui();
 
 		// Vertex buffer and attributes
 		struct 
@@ -59,5 +64,7 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 		// active frame buffer index
 		uint32_t currentBuffer = 0;
+
+		std::unique_ptr<Vk::ImGuiImpl> imGui;
     };
 }

@@ -70,6 +70,11 @@ entt::registry& CG::Engine::GetRegistry()
 	return registry;
 }
 
+const CG::Vk::Device* CG::Engine::GetDevice() const
+{
+	return vkDevice;
+}
+
 bool CG::Engine::Init()
 {
     return SetupDependencies() && InitSDL() && InitWindow() && InitGraphicsAPI();

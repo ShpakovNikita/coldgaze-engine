@@ -31,11 +31,13 @@ namespace CG
         void Run();
 
 		entt::registry& GetRegistry();
+		const Vk::Device* GetDevice() const;
 
 	protected:
         virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
         virtual void RenderFrame();
         virtual void Prepare();
+		virtual void Cleanup();
 
 		VkShaderModule LoadSPIRVShader(const std::string& filename) const;
 		const std::string GetAssetPath() const;
@@ -80,7 +82,6 @@ namespace CG
     private:
         bool Init();
         void MainLoop(float deltaTime);
-        void Cleanup();
 
 		void HandleSystemInput(const SDL_Event& event);
 

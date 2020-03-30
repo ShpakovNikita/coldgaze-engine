@@ -48,7 +48,7 @@ CG::Vk::Device::~Device()
     }
 }
 
-uint32_t CG::Vk::Device::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags aProperties, VkBool32* memTypeFound /*= nullptr*/)
+uint32_t CG::Vk::Device::GetMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags aProperties, VkBool32* memTypeFound /*= nullptr*/) const
 {
     for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
     {

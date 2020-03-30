@@ -11,6 +11,9 @@
 #include "ECS\Components\CameraComponent.hpp"
 #include "ECS\Systems\CameraSystem.hpp"
 #include <memory>
+#include "Render\Vulkan\ImGuiImpl.hpp"
+
+using namespace CG;
 
 constexpr uint64_t DEFAULT_FENCE_TIMEOUT = 100000000000;
 constexpr float DEFAULT_FOV = 60.0f;
@@ -26,6 +29,8 @@ namespace STriangleEngine
 CG::TriangleEngine::TriangleEngine(CG::EngineConfig& engineConfig)
     : CG::Engine(engineConfig)
 { }
+
+CG::TriangleEngine::~TriangleEngine() = default;
 
 void CG::TriangleEngine::RenderFrame()
 {
@@ -61,8 +66,15 @@ void CG::TriangleEngine::Prepare()
 	// PrepareUniformBuffers();
 	SetupDescriptorSetLayout();
 	PreparePipelines();
+	PrepareImgui();
 	SetupDescriptorPool();
 	BuildCommandBuffers();
+}
+
+void CG::TriangleEngine::Cleanup()
+{
+	imGui = nullptr;
+	Engine::Cleanup();
 }
 
 VkCommandBuffer CG::TriangleEngine::GetReadyCommandBuffer()
@@ -481,4 +493,11 @@ void CG::TriangleEngine::SetupCamera()
 	uniformBufferVS = &component.uniformBufferVS;
 
 	systems.push_back(std::move(std::make_unique<CameraSystem>()));
+}
+
+void CG::TriangleEngine::PrepareImgui()
+{
+	imGui = std::make_unique<Vk::ImGuiImpl>(*this);
+	imGui->Init(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
+	imGui->InitResources(renderPass, queue);
 }
