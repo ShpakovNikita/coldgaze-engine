@@ -1,5 +1,6 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
+#include <memory>
 
 namespace CG
 {
@@ -8,6 +9,7 @@ namespace CG
 	namespace Vk
 	{
 		class Device;
+		struct Buffer;
 
 		class ImGuiImpl
 		{

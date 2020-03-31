@@ -98,8 +98,6 @@ VkCommandBuffer CG::TriangleEngine::GetReadyCommandBuffer()
 
 void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 {
-	VkDevice device = vkDevice->logicalDevice;
-
 	assert(commandBuffer != VK_NULL_HANDLE);
 
 	vkDevice->FlushCommandBuffer(commandBuffer, queue, true);

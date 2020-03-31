@@ -2,7 +2,7 @@
 
 #include "vulkan/vulkan_core.h"
 #include <assert.h>
-#include <winnt.h>
+#include <cstring>
 
 namespace CG
 {
@@ -21,9 +21,9 @@ namespace CG
 			VkBufferUsageFlags usageFlags;
 			VkMemoryPropertyFlags memoryPropertyFlags;
 
-			VkResult map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			VkResult map(VkDeviceSize mappingSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
-				return vkMapMemory(device, memory, offset, size, 0, &mapped);
+				return vkMapMemory(device, memory, offset, mappingSize, 0, &mapped);
 			}
 
 			void unmap()
@@ -40,39 +40,39 @@ namespace CG
 				return vkBindBufferMemory(device, buffer, memory, offset);
 			}
 
-			void setupDescriptor(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			void setupDescriptor(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				descriptor.offset = offset;
 				descriptor.buffer = buffer;
-				descriptor.range = size;
+				descriptor.range = aSize;
 			}
 
-			void copyTo(void* data, VkDeviceSize size)
+			void copyTo(void* data, VkDeviceSize aSize)
 			{
 				assert(mapped);
-				memcpy(mapped, data, size);
+				memcpy(mapped, data, aSize);
 			}
 
-			VkResult flush(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			VkResult flush(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				VkMappedMemoryRange mappedRange = {};
 				mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 				mappedRange.memory = memory;
 				mappedRange.offset = offset;
-				mappedRange.size = size;
+				mappedRange.size = aSize;
 				return vkFlushMappedMemoryRanges(device, 1, &mappedRange);
 			}
 
 			/**
 			* @note Only required for non-coherent memory
 			*/
-			VkResult invalidate(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			VkResult invalidate(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				VkMappedMemoryRange mappedRange = {};
 				mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
 				mappedRange.memory = memory;
 				mappedRange.offset = offset;
-				mappedRange.size = size;
+				mappedRange.size = aSize;
 				return vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
 			}
 
