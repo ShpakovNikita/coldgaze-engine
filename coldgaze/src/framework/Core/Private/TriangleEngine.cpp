@@ -15,7 +15,6 @@
 
 using namespace CG;
 
-constexpr uint64_t DEFAULT_FENCE_TIMEOUT = 100000000000;
 constexpr float DEFAULT_FOV = 60.0f;
 
 namespace STriangleEngine
@@ -101,29 +100,9 @@ void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 {
 	VkDevice device = vkDevice->logicalDevice;
 
-    assert(commandBuffer != VK_NULL_HANDLE);
+	assert(commandBuffer != VK_NULL_HANDLE);
 
-	VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
-
-    VkSubmitInfo queueSubmitInfo = {};
-    queueSubmitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    queueSubmitInfo.commandBufferCount = 1;
-    queueSubmitInfo.pCommandBuffers = &commandBuffer;
-
-    // Create fence to ensure that the command buffer has finished executing
-    VkFenceCreateInfo fenceCreateInfo = {};
-    fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceCreateInfo.flags = 0;
-    VkFence fence;
-    VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
-
-    // Submit to the queue
-    VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &queueSubmitInfo, fence));
-    // Wait for the fence to signal that command buffer has finished executing
-    VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
-
-    vkDestroyFence(device, fence, nullptr);
-    vkFreeCommandBuffers(device, vkCmdPool, 1, &commandBuffer);
+	vkDevice->FlushCommandBuffer(commandBuffer, queue, true);
 }
 
 void CG::TriangleEngine::PrepareVertices()

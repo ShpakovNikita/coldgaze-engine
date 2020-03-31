@@ -24,6 +24,17 @@ namespace CG
 
 			VkImage fontImage = VK_NULL_HANDLE;
 			VkDeviceMemory fontMemory = VK_NULL_HANDLE;
+			VkImageView fontView = VK_NULL_HANDLE;
+			VkSampler sampler;
+			VkDescriptorPool descriptorPool;
+			VkDescriptorSetLayout descriptorSetLayout;
+			VkDescriptorSet descriptorSet;
+			VkPipelineCache pipelineCache;
+			VkPipelineLayout pipelineLayout;
+			VkPipeline pipeline;
+
+			std::unique_ptr<Buffer> vertexBuffer;
+			std::unique_ptr<Buffer> indexBuffer;
 		};
 	}
 }

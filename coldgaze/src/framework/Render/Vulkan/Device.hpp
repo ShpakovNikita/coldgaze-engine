@@ -1,11 +1,19 @@
+#pragma once
+
 #include "vulkan\vulkan_core.h"
 #include <vector>
 #include <string>
+
+#define VK_FLAGS_NONE 0
+// Default fence timeout in nanoseconds
+#define DEFAULT_FENCE_TIMEOUT 100000000000
 
 namespace CG
 {
 	namespace Vk
 	{
+		struct Buffer;
+
 		class Device
 		{
 		public:
@@ -72,6 +80,18 @@ namespace CG
 			*/
 			uint32_t GetQueueFamilyIndex(VkQueueFlagBits queueFlags);
 
+			/**
+			* Finish command buffer recording and submit it to a queue
+			*
+			* @param commandBuffer Command buffer to flush
+			* @param queue Queue to submit the command buffer to
+			* @param free (Optional) Free the command buffer once it has been submitted (Defaults to true)
+			*
+			* @note The queue that the command buffer is submitted to must be from the same family index as the pool it was allocated from
+			* @note Uses a fence to ensure command buffer has finished executing
+			*/
+			void FlushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue queue, bool free = true) const;
+
 			// TODO: incapsulate in device
 			/**
             * Selected a suitable supported depth format starting with 32 bit down to 16 bit
@@ -107,7 +127,7 @@ namespace CG
 			*
 			* @return VK_SUCCESS if buffer handle and memory have been created and (optionally passed) data has been copied
 			*/
-			// VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, vks::Buffer* buffer, VkDeviceSize size, void* data = nullptr);
+			VkResult CreateBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, Buffer* buffer, VkDeviceSize size, void* data = nullptr) const;
 
 			/**
 			* Copy buffer data from src to dst using VkCmdCopyBuffer
@@ -132,6 +152,16 @@ namespace CG
 			* @return A handle to the created command buffer
 			*/
 			VkCommandPool CreateCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+			/**
+			* Allocate a command buffer from the command pool
+			*
+			* @param level Level of the new command buffer (primary or secondary)
+			* @param (Optional) begin If true, recording on the new command buffer will be started (vkBeginCommandBuffer) (Defaults to false)
+			*
+			* @return A handle to the allocated command buffer
+			*/
+			VkCommandBuffer CreateCommandBuffer(VkCommandBufferLevel level, bool begin = false) const;
 
 			/**
 			* Check if an extension is supported by the (physical device)

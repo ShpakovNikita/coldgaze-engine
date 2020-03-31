@@ -89,6 +89,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+add_definitions(-DCMAKE_GENERATOR_PLATFORM=x64)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_definitions(-std=c++17)
