@@ -325,21 +325,11 @@ void CG::TriangleEngine::PreparePipelines()
 	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
 	// Vertex shader
-	shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	// Load binary SPIR-V shader
-	shaderStages[0].module = LoadSPIRVShader(GetAssetPath() + "shaders/compiled/triangle.vert.spv");
-	// Main entry point for the shader
-	shaderStages[0].pName = "main";
+	shaderStages[0] = LoadShader(GetAssetPath() + "shaders/compiled/triangle.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
 	assert(shaderStages[0].module != VK_NULL_HANDLE);
 
 	// Fragment shader
-	shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	// Load binary SPIR-V shader
-	shaderStages[1].module = LoadSPIRVShader(GetAssetPath() + "shaders/compiled/triangle.frag.spv");
-	// Main entry point for the shader
-	shaderStages[1].pName = "main";  
+	shaderStages[1] = LoadShader(GetAssetPath() + "shaders/compiled/triangle.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 	assert(shaderStages[1].module != VK_NULL_HANDLE);
 
 	pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());

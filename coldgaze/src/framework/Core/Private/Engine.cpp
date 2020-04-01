@@ -132,6 +132,18 @@ VkShaderModule CG::Engine::LoadSPIRVShader(const std::string& filename) const
 	return VK_NULL_HANDLE;
 }
 
+VkPipelineShaderStageCreateInfo CG::Engine::LoadShader(const std::string& filename, VkShaderStageFlagBits stage)
+{
+	VkPipelineShaderStageCreateInfo shaderStage = {};
+	shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStage.stage = stage;
+	shaderStage.module = LoadSPIRVShader(filename);
+	shaderStage.pName = "main";
+	assert(shaderStage.module != VK_NULL_HANDLE);
+	shaderModules.push_back(shaderStage.module);
+	return shaderStage;
+}
+
 const std::string CG::Engine::GetAssetPath() const
 {
 #if defined(VK_EXAMPLE_ASSETS_DIR)
@@ -151,8 +163,16 @@ void CG::Engine::MainLoop(float deltaTime)
 void CG::Engine::Cleanup()
 {
 	DestroyCommandBuffers();
+
+	/*
+	for (auto& shaderModule : shaderModules)
+	{
+		vkDestroyShaderModule(vkDevice->logicalDevice, shaderModule, nullptr);
+	}
+	*/
 	delete vkSwapChain;
 	delete vkDevice;
+
 	vkDestroyInstance(vkInstance, nullptr);
 	CleanupSDL();
 }

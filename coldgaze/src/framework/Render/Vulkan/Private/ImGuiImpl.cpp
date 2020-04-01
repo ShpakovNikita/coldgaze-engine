@@ -9,7 +9,7 @@
 
 using namespace CG;
 
-CG::Vk::ImGuiImpl::ImGuiImpl(const Engine& aEngine)
+CG::Vk::ImGuiImpl::ImGuiImpl(Engine& aEngine)
 	: engine(aEngine)
 	, device(aEngine.GetDevice())
 {
@@ -163,5 +163,84 @@ void CG::Vk::ImGuiImpl::InitResources([[ maybe_unused ]] VkRenderPass renderPass
 	pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
 	VK_CHECK_RESULT(vkCreatePipelineCache(device->logicalDevice, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
 
-}
+	// Pipeline layout
+	// Push constants for UI rendering parameters
+	VkPushConstantRange pushConstantRange = Initializers::PushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(PushConstBlock), 0);
+	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = Initializers::PipelineLayoutCreateInfo(&descriptorSetLayout, 1);
+	pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+	pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+	VK_CHECK_RESULT(vkCreatePipelineLayout(device->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
+	// Setup graphics pipeline for UI rendering
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyState =
+		Initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
+
+	VkPipelineRasterizationStateCreateInfo rasterizationState =
+		Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+
+	VkPipelineColorBlendAttachmentState blendAttachmentState{};
+	blendAttachmentState.blendEnable = VK_TRUE;
+	blendAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	blendAttachmentState.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendAttachmentState.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendAttachmentState.colorBlendOp = VK_BLEND_OP_ADD;
+	blendAttachmentState.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendAttachmentState.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	blendAttachmentState.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlendState =
+		Initializers::PipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
+
+	VkPipelineDepthStencilStateCreateInfo depthStencilState =
+		Initializers::PipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
+
+	VkPipelineViewportStateCreateInfo viewportState =
+		Initializers::PipelineViewportStateCreateInfo(1, 1, 0);
+
+	VkPipelineMultisampleStateCreateInfo multisampleState =
+		Initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
+
+	std::vector<VkDynamicState> dynamicStateEnables = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR
+	};
+	VkPipelineDynamicStateCreateInfo dynamicState =
+		Initializers::PipelineDynamicStateCreateInfo(dynamicStateEnables);
+
+	std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{};
+
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo = Initializers::PipelineCreateInfo(pipelineLayout, renderPass);
+
+	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyState;
+	pipelineCreateInfo.pRasterizationState = &rasterizationState;
+	pipelineCreateInfo.pColorBlendState = &colorBlendState;
+	pipelineCreateInfo.pMultisampleState = &multisampleState;
+	pipelineCreateInfo.pViewportState = &viewportState;
+	pipelineCreateInfo.pDepthStencilState = &depthStencilState;
+	pipelineCreateInfo.pDynamicState = &dynamicState;
+	pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+	pipelineCreateInfo.pStages = shaderStages.data();
+
+	// Vertex bindings an attributes based on ImGui vertex definition
+	std::vector<VkVertexInputBindingDescription> vertexInputBindings = {
+		Initializers::VertexInputBindingDescription(0, sizeof(ImDrawVert), VK_VERTEX_INPUT_RATE_VERTEX),
+	};
+	std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
+		Initializers::VertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, pos)),	// Location 0: Position
+		Initializers::VertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32_SFLOAT, offsetof(ImDrawVert, uv)),	    // Location 1: UV
+		Initializers::VertexInputAttributeDescription(0, 2, VK_FORMAT_R8G8B8A8_UNORM, offsetof(ImDrawVert, col)),	// Location 2: Color
+	};
+
+	VkPipelineVertexInputStateCreateInfo vertexInputState = Initializers::PipelineVertexInputStateCreateInfo();
+	vertexInputState.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexInputBindings.size());
+	vertexInputState.pVertexBindingDescriptions = vertexInputBindings.data();
+	vertexInputState.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexInputAttributes.size());
+	vertexInputState.pVertexAttributeDescriptions = vertexInputAttributes.data();
+
+	pipelineCreateInfo.pVertexInputState = &vertexInputState;
+
+	shaderStages[0] = engine.LoadShader(engine.GetAssetPath() + "shaders/compiled/ui.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+	shaderStages[1] = engine.LoadShader(engine.GetAssetPath() + "shaders/compiled/ui.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+	VK_CHECK_RESULT(vkCreateGraphicsPipelines(device->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
+}

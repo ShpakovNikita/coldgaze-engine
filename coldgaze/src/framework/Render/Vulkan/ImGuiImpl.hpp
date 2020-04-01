@@ -1,6 +1,7 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 #include <memory>
+#include "glm/ext/vector_float2.hpp"
 
 namespace CG
 {
@@ -14,14 +15,19 @@ namespace CG
 		class ImGuiImpl
 		{
 		public:
-			ImGuiImpl(const Engine& engine);
+			struct PushConstBlock {
+				glm::vec2 scale;
+				glm::vec2 translate;
+			} pushConstBlock;
+
+			ImGuiImpl(Engine& engine);
 			~ImGuiImpl();
 
 			void Init(float width, float height);
 			void InitResources(VkRenderPass renderPass, VkQueue queue);
 
 		private:
-			const Engine& engine;
+			Engine& engine;
 			const Vk::Device* device;
 
 			VkImage fontImage = VK_NULL_HANDLE;
