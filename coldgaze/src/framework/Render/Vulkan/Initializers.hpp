@@ -360,6 +360,20 @@ namespace CG
 				pipelineVertexInputStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 				return pipelineVertexInputStateCreateInfo;
 			}
+
+			inline VkViewport Viewport(
+				float width,
+				float height,
+				float minDepth,
+				float maxDepth)
+			{
+				VkViewport viewport{};
+				viewport.width = width;
+				viewport.height = height;
+				viewport.minDepth = minDepth;
+				viewport.maxDepth = maxDepth;
+				return viewport;
+			}
 		}
 	}
 }

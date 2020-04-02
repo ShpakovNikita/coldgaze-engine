@@ -26,6 +26,9 @@ namespace CG
 			void Init(float width, float height);
 			void InitResources(VkRenderPass renderPass, VkQueue queue);
 
+			void UpdateBuffers();
+			void DrawFrame(VkCommandBuffer commandBuffer);
+
 		private:
 			Engine& engine;
 			const Vk::Device* device;
@@ -43,6 +46,8 @@ namespace CG
 
 			std::unique_ptr<Buffer> vertexBuffer;
 			std::unique_ptr<Buffer> indexBuffer;
+			int32_t vertexCount = 0;
+			int32_t indexCount = 0;
 		};
 	}
 }

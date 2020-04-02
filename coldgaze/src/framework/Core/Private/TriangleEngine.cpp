@@ -12,6 +12,7 @@
 #include "ECS\Systems\CameraSystem.hpp"
 #include <memory>
 #include "Render\Vulkan\ImGuiImpl.hpp"
+#include "imgui\imgui.h"
 
 using namespace CG;
 
@@ -62,7 +63,6 @@ void CG::TriangleEngine::Prepare()
     Engine::Prepare();
 	SetupCamera();
     PrepareVertices();
-	// PrepareUniformBuffers();
 	SetupDescriptorSetLayout();
 	PreparePipelines();
 	PrepareImgui();
@@ -83,7 +83,7 @@ VkCommandBuffer CG::TriangleEngine::GetReadyCommandBuffer()
 
     VkCommandBufferAllocateInfo cmdBufAllocateInfo = {};
     cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    cmdBufAllocateInfo.commandPool = vkCmdPool;
+    cmdBufAllocateInfo.commandPool = vkDevice->commandPool;
     cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     cmdBufAllocateInfo.commandBufferCount = 1;
 
@@ -467,4 +467,33 @@ void CG::TriangleEngine::PrepareImgui()
 	imGui = std::make_unique<Vk::ImGuiImpl>(*this);
 	imGui->Init(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
 	imGui->InitResources(renderPass, queue);
+}
+
+void CG::TriangleEngine::DrawUi()
+{
+	ImGui::NewFrame();
+
+	// Init imGui windows and elements
+
+	ImVec4 clear_color = ImColor(114, 144, 154);
+	static float f = 0.0f;
+	ImGui::TextUnformatted("One");
+	ImGui::TextUnformatted("Two");
+
+	ImGui::Text("Camera");
+	ImGui::SetNextWindowSize(ImVec2(200, 200));
+	ImGui::Begin("Example settings");
+	ImGui::End();
+
+	ImGui::SetNextWindowPos(ImVec2(650, 20));
+	ImGui::ShowDemoWindow();
+
+	// Render to generate draw buffers
+	ImGui::Render();
+}
+
+void CG::TriangleEngine::BuildUiCommandBuffers()
+{
+	DrawUi();
+	imGui->UpdateBuffers();
 }

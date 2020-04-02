@@ -40,6 +40,9 @@ namespace CG
 		void SetupCamera();
 		void PrepareImgui();
 
+		void DrawUi();
+		void BuildUiCommandBuffers();
+
 		// Vertex buffer and attributes
 		struct 
 		{

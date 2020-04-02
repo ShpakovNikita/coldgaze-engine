@@ -21,12 +21,12 @@ namespace CG
 			VkBufferUsageFlags usageFlags;
 			VkMemoryPropertyFlags memoryPropertyFlags;
 
-			VkResult map(VkDeviceSize mappingSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			VkResult Map(VkDeviceSize mappingSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				return vkMapMemory(device, memory, offset, mappingSize, 0, &mapped);
 			}
 
-			void unmap()
+			void Unmap()
 			{
 				if (mapped)
 				{
@@ -35,25 +35,25 @@ namespace CG
 				}
 			}
 
-			VkResult bind(VkDeviceSize offset = 0)
+			VkResult Bind(VkDeviceSize offset = 0)
 			{
 				return vkBindBufferMemory(device, buffer, memory, offset);
 			}
 
-			void setupDescriptor(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			void SetupDescriptor(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				descriptor.offset = offset;
 				descriptor.buffer = buffer;
 				descriptor.range = aSize;
 			}
 
-			void copyTo(void* data, VkDeviceSize aSize)
+			void CopyTo(void* data, VkDeviceSize aSize)
 			{
 				assert(mapped);
 				memcpy(mapped, data, aSize);
 			}
 
-			VkResult flush(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			VkResult Flush(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				VkMappedMemoryRange mappedRange = {};
 				mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -66,7 +66,7 @@ namespace CG
 			/**
 			* @note Only required for non-coherent memory
 			*/
-			VkResult invalidate(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
+			VkResult Invalidate(VkDeviceSize aSize = VK_WHOLE_SIZE, VkDeviceSize offset = 0)
 			{
 				VkMappedMemoryRange mappedRange = {};
 				mappedRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -76,7 +76,7 @@ namespace CG
 				return vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
 			}
 
-			void destroy()
+			void Destroy()
 			{
 				if (buffer)
 				{

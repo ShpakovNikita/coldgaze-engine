@@ -123,7 +123,7 @@ void CG::Vk::ImGuiImpl::InitResources([[ maybe_unused ]] VkRenderPass renderPass
 
 	device->FlushCommandBuffer(copyCmd, copyQueue, true);
 
-	stagingBuffer.destroy();
+	stagingBuffer.Destroy();
 
 	VkSamplerCreateInfo samplerInfo = Initializers::SamplerCreateInfo();
 	samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -243,4 +243,93 @@ void CG::Vk::ImGuiImpl::InitResources([[ maybe_unused ]] VkRenderPass renderPass
 	shaderStages[1] = engine.LoadShader(engine.GetAssetPath() + "shaders/compiled/ui.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
 	VK_CHECK_RESULT(vkCreateGraphicsPipelines(device->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
+}
+
+void CG::Vk::ImGuiImpl::UpdateBuffers()
+{
+	ImDrawData* imDrawData = ImGui::GetDrawData();
+
+	VkDeviceSize vertexBufferSize = imDrawData->TotalVtxCount * sizeof(ImDrawVert);
+	VkDeviceSize indexBufferSize = imDrawData->TotalIdxCount * sizeof(ImDrawIdx);
+
+	if ((vertexBufferSize == 0) || (indexBufferSize == 0)) {
+		return;
+	}
+
+	if ((vertexBuffer->buffer == VK_NULL_HANDLE) || (vertexCount != imDrawData->TotalVtxCount)) {
+		vertexBuffer->Unmap();
+		vertexBuffer->Destroy();
+		VK_CHECK_RESULT(device->CreateBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, vertexBuffer.get() , vertexBufferSize));
+		vertexCount = imDrawData->TotalVtxCount;
+		vertexBuffer->Unmap();
+		vertexBuffer->Map();
+	}
+
+	if ((indexBuffer->buffer == VK_NULL_HANDLE) || (indexCount < imDrawData->TotalIdxCount)) {
+		indexBuffer->Unmap();
+		indexBuffer->Destroy();
+		VK_CHECK_RESULT(device->CreateBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, indexBuffer.get(), indexBufferSize));
+		indexCount = imDrawData->TotalIdxCount;
+		indexBuffer->Map();
+	}
+
+	ImDrawVert* vtxDst = (ImDrawVert*)vertexBuffer->mapped;
+	ImDrawIdx* idxDst = (ImDrawIdx*)indexBuffer->mapped;
+
+	for (int n = 0; n < imDrawData->CmdListsCount; n++) {
+		const ImDrawList* cmd_list = imDrawData->CmdLists[n];
+		memcpy(vtxDst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+		memcpy(idxDst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+		vtxDst += cmd_list->VtxBuffer.Size;
+		idxDst += cmd_list->IdxBuffer.Size;
+	}
+
+	vertexBuffer->Flush();
+	indexBuffer->Flush();
+}
+
+void CG::Vk::ImGuiImpl::DrawFrame(VkCommandBuffer commandBuffer)
+{
+	ImGuiIO& io = ImGui::GetIO();
+
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+	VkViewport viewport = Initializers::Viewport(ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y, 0.0f, 1.0f);
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+	// UI scale and translate via push constants
+	pushConstBlock.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
+	pushConstBlock.translate = glm::vec2(-1.0f);
+	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstBlock), &pushConstBlock);
+
+	// Render commands
+	ImDrawData* imDrawData = ImGui::GetDrawData();
+	int32_t vertexOffset = 0;
+	int32_t indexOffset = 0;
+
+	if (imDrawData->CmdListsCount > 0) {
+
+		VkDeviceSize offsets[1] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer->buffer, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer->buffer, 0, VK_INDEX_TYPE_UINT16);
+
+		for (int32_t i = 0; i < imDrawData->CmdListsCount; i++)
+		{
+			const ImDrawList* cmd_list = imDrawData->CmdLists[i];
+			for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++)
+			{
+				const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[j];
+				VkRect2D scissorRect;
+				scissorRect.offset.x = std::max((int32_t)(pcmd->ClipRect.x), 0);
+				scissorRect.offset.y = std::max((int32_t)(pcmd->ClipRect.y), 0);
+				scissorRect.extent.width = (uint32_t)(pcmd->ClipRect.z - pcmd->ClipRect.x);
+				scissorRect.extent.height = (uint32_t)(pcmd->ClipRect.w - pcmd->ClipRect.y);
+				vkCmdSetScissor(commandBuffer, 0, 1, &scissorRect);
+				vkCmdDrawIndexed(commandBuffer, pcmd->ElemCount, 1, indexOffset, vertexOffset, 0);
+				indexOffset += pcmd->ElemCount;
+			}
+			vertexOffset += cmd_list->VtxBuffer.Size;
+		}
+	}
 }

@@ -324,19 +324,19 @@ VkResult CG::Vk::Device::CreateBuffer(VkBufferUsageFlags usageFlags, VkMemoryPro
 
 	if (data != nullptr)
 	{
-		VK_CHECK_RESULT(buffer->map());
+		VK_CHECK_RESULT(buffer->Map());
 		memcpy(buffer->mapped, data, size);
 		if ((memoryPropertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0)
 		{
-			buffer->flush();
+			buffer->Flush();
 		}
 
-		buffer->unmap();
+		buffer->Unmap();
 	}
 
-	buffer->setupDescriptor();
+	buffer->SetupDescriptor();
 
-	return buffer->bind();
+	return buffer->Bind();
 }
 
 VkCommandPool CG::Vk::Device::CreateCommandPool(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags createFlags /*= VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT*/)
