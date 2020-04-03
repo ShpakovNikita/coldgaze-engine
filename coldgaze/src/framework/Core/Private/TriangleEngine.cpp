@@ -412,6 +412,10 @@ void CG::TriangleEngine::BuildCommandBuffers()
 	renderPassBeginInfo.clearValueCount = 2;
 	renderPassBeginInfo.pClearValues = clearValues;
 
+	DrawUi();
+
+	imGui->UpdateBuffers();
+
 	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
 	{
 		renderPassBeginInfo.framebuffer = frameBuffers[i];
@@ -440,6 +444,8 @@ void CG::TriangleEngine::BuildCommandBuffers()
 		vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &vertices.buffer, offsets);
 		vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 		vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
+
+		imGui->DrawFrame(drawCmdBuffers[i]);
 
 		vkCmdEndRenderPass(drawCmdBuffers[i]);
 

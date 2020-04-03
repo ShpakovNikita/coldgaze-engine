@@ -12,6 +12,8 @@ using namespace CG;
 CG::Vk::ImGuiImpl::ImGuiImpl(Engine& aEngine)
 	: engine(aEngine)
 	, device(aEngine.GetDevice())
+	, vertexBuffer(std::make_unique<Buffer>())
+	, indexBuffer(std::make_unique<Buffer>())
 {
 	ImGui::CreateContext();
 }
