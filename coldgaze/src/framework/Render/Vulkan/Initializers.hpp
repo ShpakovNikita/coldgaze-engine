@@ -367,12 +367,19 @@ namespace CG
 				float minDepth,
 				float maxDepth)
 			{
-				VkViewport viewport{};
+				VkViewport viewport = {};
 				viewport.width = width;
 				viewport.height = height;
 				viewport.minDepth = minDepth;
 				viewport.maxDepth = maxDepth;
 				return viewport;
+			}
+
+			inline VkPhysicalDeviceRayTracingPropertiesNV PhysicalDeviceRayTracingPropertiesNV()
+			{
+				VkPhysicalDeviceRayTracingPropertiesNV rtProperties = {};
+				rtProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PROPERTIES_NV;
+				return rtProperties;
 			}
 		}
 	}

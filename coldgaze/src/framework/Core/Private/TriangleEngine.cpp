@@ -18,14 +18,6 @@ using namespace CG;
 
 constexpr float DEFAULT_FOV = 60.0f;
 
-namespace STriangleEngine
-{
-	struct Vertex {
-		float position[3];
-		float color[3];
-	};
-}
-
 CG::TriangleEngine::TriangleEngine(CG::EngineConfig& engineConfig)
     : CG::Engine(engineConfig)
 { }
@@ -61,6 +53,7 @@ void CG::TriangleEngine::RenderFrame(float deltaTime)
 void CG::TriangleEngine::Prepare()
 {
     Engine::Prepare();
+	InitRayTracing();
 	SetupCamera();
     PrepareVertices();
 	SetupDescriptorSetLayout();
@@ -295,7 +288,7 @@ void CG::TriangleEngine::PreparePipelines()
 
 	VkVertexInputBindingDescription vertexInputBinding = {};
 	vertexInputBinding.binding = 0;
-	vertexInputBinding.stride = sizeof(STriangleEngine::Vertex);
+	vertexInputBinding.stride = sizeof(Vertex);
 	vertexInputBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 	std::array<VkVertexInputAttributeDescription, 2> vertexInputAttributs;
@@ -307,13 +300,13 @@ void CG::TriangleEngine::PreparePipelines()
 	vertexInputAttributs[0].binding = 0;
 	vertexInputAttributs[0].location = 0;
 	vertexInputAttributs[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vertexInputAttributs[0].offset = offsetof(STriangleEngine::Vertex, position);
+	vertexInputAttributs[0].offset = offsetof(Vertex, position);
 
 	// Attribute location 1: Color
 	vertexInputAttributs[1].binding = 0;
 	vertexInputAttributs[1].location = 1;
 	vertexInputAttributs[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	vertexInputAttributs[1].offset = offsetof(STriangleEngine::Vertex, color);
+	vertexInputAttributs[1].offset = offsetof(Vertex, color);
 
 	VkPipelineVertexInputStateCreateInfo vertexInputState = {};
 	vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;

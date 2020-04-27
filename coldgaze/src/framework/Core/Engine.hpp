@@ -1,10 +1,12 @@
 #pragma once
-#include "vulkan\vulkan_core.h"
+#include "vulkan/vulkan.hpp"
+#include "vulkan/vulkan_core.h"
 #include <entt/entt.hpp>
 #include <vector>
 #include <string>
 #include <chrono>
 #include <memory>
+#include "Render/Vulkan/Buffer.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -15,6 +17,12 @@ union SDL_Event;
 
 namespace CG
 {
+	// TODO: get rid of vertex here
+	struct Vertex {
+		float position[3];
+		float color[3];
+	};
+
     namespace Vk 
     {
         class SwapChain;
@@ -43,6 +51,14 @@ namespace CG
 		const std::string GetAssetPath() const;
 
 	protected:
+		struct ObjModel
+		{
+			uint32_t nbIndices { 0 };
+			uint32_t nbVertices { 0 };
+			Vk::Buffer vertexBuffer;
+			Vk::Buffer indexBuffer;
+		};
+
         virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
         virtual void RenderFrame(float deltaTime);
         virtual void Prepare();
@@ -94,6 +110,12 @@ namespace CG
 
 		std::unique_ptr<InputHandler> inputHandler;
 		std::unique_ptr<Window> currentWindow;
+
+		// TODO: refactor to private
+		VkGeometryNV ObjectToVkGeometryNV(const ObjModel& model);
+
+		void InitRayTracing();
+		VkPhysicalDeviceRayTracingPropertiesNV rayTracingProperties;
 
     private:
         bool Init();

@@ -17,6 +17,7 @@
 #include "SDL2/SDL_events.h"
 #include "Core/InputHandler.hpp"
 #include "Core/Window.hpp"
+#include "Render/Vulkan/Initializers.hpp"
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -587,6 +588,41 @@ void CG::Engine::SubmitFrame()
 {
 	VK_CHECK_RESULT(vkSwapChain->QueuePresent(queue, currentBuffer, semaphores.renderComplete));
 	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
+}
+
+VkGeometryNV CG::Engine::ObjectToVkGeometryNV(const ObjModel& model)
+{
+	VkGeometryTrianglesNV triangles;
+
+	triangles.vertexData = model.vertexBuffer.buffer;
+	triangles.vertexOffset = 0;  // Start at the beginning of the buffer
+	triangles.vertexCount = model.nbVertices;
+	triangles.vertexStride = sizeof(Vertex);
+	triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+	triangles.indexData = model.indexBuffer.buffer;
+	triangles.indexOffset = 0;
+	triangles.indexCount = model.nbIndices;
+	triangles.indexType = VK_INDEX_TYPE_UINT32;  // 32-bit indices
+
+	VkGeometryDataNV geoData;
+	geoData.triangles = triangles;
+	VkGeometryNV geometry;
+	geometry.geometry = geoData;
+	// Consider the geometry opaque for optimization
+	geometry.flags = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	return geometry;
+}
+
+void CG::Engine::InitRayTracing()
+{
+	VkPhysicalDeviceRayTracingPropertiesNV rtProperties = Vk::Initializers::PhysicalDeviceRayTracingPropertiesNV();
+
+	VkPhysicalDeviceProperties2 physicalDeviceProperties;
+	physicalDeviceProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	physicalDeviceProperties.pNext = &rtProperties;
+	vkGetPhysicalDeviceProperties2(vkDevice->physicalDevice, &physicalDeviceProperties);
+
+	rayTracingProperties = rtProperties;
 }
 
 bool CG::Engine::CreateVkInstance()
