@@ -23,11 +23,16 @@ namespace CG
 		virtual ~TriangleEngine();
 
     protected:
-        void RenderFrame() override;
+        void RenderFrame(float deltaTime) override;
         void Prepare() override;
 		void Cleanup() override;
 
     private:
+		struct UISettings {
+			std::array<float, 50> frameTimes{};
+			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
+		} uiSettings;
+
 		VkCommandBuffer GetReadyCommandBuffer(); 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
 
@@ -37,10 +42,12 @@ namespace CG
 		void SetupDescriptorPool();
 		void BuildCommandBuffers();
 
+		void RenderScene();
+
 		void SetupCamera();
 		void PrepareImgui();
 
-		void DrawUi();
+		void DrawUI();
 		void BuildUiCommandBuffers();
 
 		// Vertex buffer and attributes
@@ -65,8 +72,6 @@ namespace CG
 		VkPipeline pipeline = {};
 		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-		// active frame buffer index
-		uint32_t currentBuffer = 0;
 
 		std::unique_ptr<Vk::ImGuiImpl> imGui;
     };

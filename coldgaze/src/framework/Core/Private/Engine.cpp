@@ -15,16 +15,21 @@
 #include "ECS/ICGSystem.hpp"
 #include <chrono>
 #include "SDL2/SDL_events.h"
+#include "Core/InputHandler.hpp"
+#include "Core/Window.hpp"
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
 	"VK_LAYER_KHRONOS_validation",
 };
 
-CG::Engine::Engine(CG::EngineConfig& a_engine_config)
-    : engineConfig(a_engine_config)
+CG::Engine::Engine(CG::EngineConfig& aEngineConfig)
+    : engineConfig(aEngineConfig)
+	, inputHandler(std::make_unique<InputHandler>())
+	, currentWindow(std::make_unique<Window>())
 {
-	// pass
+	currentWindow->windowResolution.height = static_cast<float>(aEngineConfig.height);
+	currentWindow->windowResolution.width = static_cast<float>(aEngineConfig.width);
 }
 
 CG::Engine::~Engine() = default;
@@ -34,7 +39,7 @@ VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures()
 	return {};
 }
 
-void CG::Engine::RenderFrame()
+void CG::Engine::RenderFrame([[ maybe_unused ]] float deltaTime)
 {
 
 }
@@ -73,6 +78,16 @@ entt::registry& CG::Engine::GetRegistry()
 const CG::Vk::Device* CG::Engine::GetDevice() const
 {
 	return vkDevice;
+}
+
+const CG::InputHandler* CG::Engine::GetInputHandler() const
+{
+	return inputHandler.get();
+}
+
+const CG::Window* CG::Engine::GetCurrentWindow() const
+{
+	return currentWindow.get();
 }
 
 bool CG::Engine::Init()
@@ -157,7 +172,7 @@ void CG::Engine::MainLoop(float deltaTime)
 {
     PollEvents(deltaTime);
 	UpdateSystems(deltaTime);
-	RenderFrame();
+	RenderFrame(deltaTime);
 }
 
 void CG::Engine::Cleanup()
@@ -179,6 +194,8 @@ void CG::Engine::Cleanup()
 
 void CG::Engine::HandleSystemInput(const SDL_Event& event)
 {
+	inputHandler->AddEvent(event);
+
 	switch (event.type)
 	{
 	case SDL_WINDOWEVENT:
@@ -561,6 +578,17 @@ void CG::Engine::SetupFrameBuffer()
 	}
 }
 
+void CG::Engine::PrepareFrame()
+{
+	VK_CHECK_RESULT(vkSwapChain->AcquireNextImage(semaphores.presentComplete, &currentBuffer));
+}
+
+void CG::Engine::SubmitFrame()
+{
+	VK_CHECK_RESULT(vkSwapChain->QueuePresent(queue, currentBuffer, semaphores.renderComplete));
+	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
+}
+
 bool CG::Engine::CreateVkInstance()
 {
 #if ENABLE_VULKAN_VALIDATION
@@ -644,6 +672,8 @@ bool CG::Engine::CheckValidationLayersSupport()
 void CG::Engine::PollEvents(float deltaTime)
 {
     SDL_Event event;
+
+	inputHandler->Reset();
 
     while (SDL_PollEvent(&event))
     {

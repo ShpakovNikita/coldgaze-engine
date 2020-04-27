@@ -4,8 +4,10 @@
 #include "Render/Vulkan/Initializers.hpp"
 #include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Debug.hpp"
-#include "../Buffer.hpp"
-#include "../Utils.hpp"
+#include "Render/Vulkan/Buffer.hpp"
+#include "Render/Vulkan/Utils.hpp"
+#include "Core/InputHandler.hpp"
+#include "Core/Window.hpp"
 
 using namespace CG;
 
@@ -33,7 +35,7 @@ void CG::Vk::ImGuiImpl::Init(float width, float height)
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 }
 
-void CG::Vk::ImGuiImpl::InitResources([[ maybe_unused ]] VkRenderPass renderPass, [[ maybe_unused ]] VkQueue copyQueue)
+void CG::Vk::ImGuiImpl::InitResources(VkRenderPass renderPass, VkQueue copyQueue)
 {
 	ImGuiIO& io = ImGui::GetIO();
 
@@ -41,7 +43,7 @@ void CG::Vk::ImGuiImpl::InitResources([[ maybe_unused ]] VkRenderPass renderPass
 	unsigned char* fontData;
 	int texWidth, texHeight;
 	io.Fonts->GetTexDataAsRGBA32(&fontData, &texWidth, &texHeight);
-	[[ maybe_unused ]] VkDeviceSize uploadSize = static_cast<uint64_t>(texWidth) * static_cast<uint64_t>(texHeight) * 4 * sizeof(char);
+	VkDeviceSize uploadSize = static_cast<uint64_t>(texWidth) * static_cast<uint64_t>(texHeight) * 4 * sizeof(char);
 
 	VkImageCreateInfo imageInfo = CG::Vk::Initializers::ImageCreateInfo();
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -334,4 +336,21 @@ void CG::Vk::ImGuiImpl::DrawFrame(VkCommandBuffer commandBuffer)
 			vertexOffset += cmd_list->VtxBuffer.Size;
 		}
 	}
+}
+
+void CG::Vk::ImGuiImpl::UpdateUI(float deltaTime)
+{
+	// Update imGui
+	ImGuiIO& io = ImGui::GetIO();
+
+	const Window* currentWindow = engine.GetCurrentWindow();
+
+	io.DisplaySize = ImVec2(currentWindow->windowResolution.width, currentWindow->windowResolution.height);
+	io.DeltaTime = deltaTime;
+
+	const InputHandler* inputHandler = engine.GetInputHandler();
+
+	io.MousePos = ImVec2(inputHandler->mouseInput.mousePos.x, inputHandler->mouseInput.mousePos.y);
+	io.MouseDown[0] = inputHandler->mouseInput.left;
+	io.MouseDown[1] = inputHandler->mouseInput.right;
 }

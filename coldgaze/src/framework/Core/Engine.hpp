@@ -21,6 +21,8 @@ namespace CG
         class Device;
     }
     struct EngineConfig;
+	class InputHandler;
+	class Window;
 
     class Engine
     {
@@ -33,15 +35,22 @@ namespace CG
 		entt::registry& GetRegistry();
 		const Vk::Device* GetDevice() const;
 
+		const InputHandler* GetInputHandler() const;
+		const Window* GetCurrentWindow() const;
+
 		// TODO: move to some renderer interface
 		VkPipelineShaderStageCreateInfo LoadShader(const std::string& filename, VkShaderStageFlagBits stage);
 		const std::string GetAssetPath() const;
 
 	protected:
         virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
-        virtual void RenderFrame();
+        virtual void RenderFrame(float deltaTime);
         virtual void Prepare();
 		virtual void Cleanup();
+
+		// Frame utils
+		void PrepareFrame();
+		void SubmitFrame();
 
         CG::EngineConfig& engineConfig;
 
@@ -79,6 +88,12 @@ namespace CG
 		// TODO: move inside scene class
 		entt::registry registry;
 		std::vector<std::unique_ptr<ICGSystem>> systems;
+
+		// active frame buffer index
+		uint32_t currentBuffer = 0;
+
+		std::unique_ptr<InputHandler> inputHandler;
+		std::unique_ptr<Window> currentWindow;
 
     private:
         bool Init();

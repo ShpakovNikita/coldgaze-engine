@@ -6,6 +6,7 @@
 #include "Render/Vulkan/Debug.hpp"
 #include "Render/Vulkan/Device.hpp"
 #include "SDL2/SDL_events.h"
+#include "imgui/imgui.h"
 
 void CameraSystem::Update(float deltaTime, entt::registry& registry)
 {
@@ -35,43 +36,58 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 {
 	CameraComponent& component = registry.get<CameraComponent>(activeCameraEntity);
 
+	ImGuiIO& io = ImGui::GetIO();
+	bool handled = !io.WantCaptureMouse;
+
 	switch (event.type)
 	{
 	case SDL_MOUSEWHEEL:
 	{
-		float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 100.0f;
-		component.movementSpeed = glm::clamp(speedDelta, 0.0f, 1.0f);
+		if (handled)
+		{
+			float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 100.0f;
+			component.movementSpeed = glm::clamp(speedDelta, 0.0f, 1.0f);
+		}
 	}
 	break;
 
 	case SDL_MOUSEMOTION:
 	{
-		UpdateMousePos(component, event.motion.x, event.motion.y);
+		if (handled)
+		{
+			UpdateMousePos(component, event.motion.x, event.motion.y);
+		}
 	}
 	break;
 
 	case SDL_MOUSEBUTTONDOWN:
 	{
-		switch (event.button.button)
+		if (handled)
 		{
-		case SDL_BUTTON_LEFT:
-			component.input.leftMouse = true;
-			UpdateMousePos(component, event.button.x, event.button.y);
-		default:
-			break;
+			switch (event.button.button)
+			{
+			case SDL_BUTTON_LEFT:
+				component.input.leftMouse = true;
+				UpdateMousePos(component, event.button.x, event.button.y);
+			default:
+				break;
+			}
 		}
 	}
 	break;
 
 	case SDL_MOUSEBUTTONUP:
 	{
-		switch (event.button.button)
+		if (handled)
 		{
-		case SDL_BUTTON_LEFT:
-			component.input.leftMouse = false;
-			UpdateMousePos(component, event.button.x, event.button.y);
-		default:
-			break;
+			switch (event.button.button)
+			{
+			case SDL_BUTTON_LEFT:
+				component.input.leftMouse = false;
+				UpdateMousePos(component, event.button.x, event.button.y);
+			default:
+				break;
+			}
 		}
 	}
 	break;

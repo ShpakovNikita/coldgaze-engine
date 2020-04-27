@@ -29,6 +29,8 @@ namespace CG
 			void UpdateBuffers();
 			void DrawFrame(VkCommandBuffer commandBuffer);
 
+			void UpdateUI(float deltaTime);
+
 		private:
 			Engine& engine;
 			const Vk::Device* device;

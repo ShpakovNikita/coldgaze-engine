@@ -32,14 +32,13 @@ CG::TriangleEngine::TriangleEngine(CG::EngineConfig& engineConfig)
 
 CG::TriangleEngine::~TriangleEngine() = default;
 
-void CG::TriangleEngine::RenderFrame()
+void CG::TriangleEngine::RenderFrame(float deltaTime)
 {
-	VkDevice device = vkDevice->logicalDevice;
+	PrepareFrame();
 
-	VK_CHECK_RESULT(vkSwapChain->AcquireNextImage(semaphores.presentComplete, &currentBuffer));
+	imGui->UpdateUI(deltaTime);
 
-	VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-	VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentBuffer]));
+	RenderScene();
 
 	// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
 	VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -54,8 +53,9 @@ void CG::TriangleEngine::RenderFrame()
 	localSubmitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer];
 	localSubmitInfo.commandBufferCount = 1;
 
-	VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &localSubmitInfo, waitFences[currentBuffer]));
-	VK_CHECK_RESULT(vkSwapChain->QueuePresent(queue, currentBuffer, semaphores.renderComplete));
+	VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &localSubmitInfo, VK_NULL_HANDLE));
+
+	SubmitFrame();
 }
 
 void CG::TriangleEngine::Prepare()
@@ -412,7 +412,63 @@ void CG::TriangleEngine::BuildCommandBuffers()
 	renderPassBeginInfo.clearValueCount = 2;
 	renderPassBeginInfo.pClearValues = clearValues;
 
-	DrawUi();
+	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
+	{
+		renderPassBeginInfo.framebuffer = frameBuffers[i];
+
+		VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
+		vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		VkViewport viewport = {};
+		viewport.height = static_cast<float>(engineConfig.height);
+		viewport.width = static_cast<float>(engineConfig.width);
+		viewport.minDepth = 0.0f;
+		viewport.maxDepth = 1.0f;
+		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+
+		VkRect2D scissor = {};
+		scissor.extent.width = engineConfig.width;
+		scissor.extent.height = engineConfig.height;
+		scissor.offset.x = 0;
+		scissor.offset.y = 0;
+		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+
+		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+		VkDeviceSize offsets[1] = { 0 };
+		vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &vertices.buffer, offsets);
+		vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
+
+		vkCmdEndRenderPass(drawCmdBuffers[i]);
+
+		VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
+	}
+}
+
+void CG::TriangleEngine::RenderScene()
+{
+	VkCommandBufferBeginInfo cmdBufInfo = {};
+	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	cmdBufInfo.pNext = nullptr;
+
+	VkClearValue clearValues[2];
+	clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 1.0f } };
+	clearValues[1].depthStencil = { 1.0f, 0 };
+
+	VkRenderPassBeginInfo renderPassBeginInfo = {};
+	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassBeginInfo.pNext = nullptr;
+	renderPassBeginInfo.renderPass = renderPass;
+	renderPassBeginInfo.renderArea.offset.x = 0;
+	renderPassBeginInfo.renderArea.offset.y = 0;
+	renderPassBeginInfo.renderArea.extent.width = engineConfig.width;
+	renderPassBeginInfo.renderArea.extent.height = engineConfig.height;
+	renderPassBeginInfo.clearValueCount = 2;
+	renderPassBeginInfo.pClearValues = clearValues;
+
+	DrawUI();
 
 	imGui->UpdateBuffers();
 
@@ -475,7 +531,7 @@ void CG::TriangleEngine::PrepareImgui()
 	imGui->InitResources(renderPass, queue);
 }
 
-void CG::TriangleEngine::DrawUi()
+void CG::TriangleEngine::DrawUI()
 {
 	ImGui::NewFrame();
 
@@ -500,6 +556,6 @@ void CG::TriangleEngine::DrawUi()
 
 void CG::TriangleEngine::BuildUiCommandBuffers()
 {
-	DrawUi();
+	DrawUI();
 	imGui->UpdateBuffers();
 }
