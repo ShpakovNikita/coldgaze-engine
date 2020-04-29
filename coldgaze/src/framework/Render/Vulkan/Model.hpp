@@ -1,11 +1,20 @@
 #pragma once
-#include <vector>
 
+#include <vector>
+#include "glm/vec4.hpp"
+#include "glm/vec3.hpp"
+#include "glm/vec2.hpp"
+#include "glm/mat4x4.hpp"
+
+namespace tinygltf { class Model; }
 
 namespace CG
 {
 	namespace Vk
 	{
+		class Device;
+		class Texture2D;
+
 		// Layout structure
 		enum class VertexComponent : uint8_t {
 			POSITION = 0,
@@ -55,8 +64,79 @@ namespace CG
 
 		class GLTFModel
 		{
+		public:
 			Device* vkDevice = nullptr;
 			VkQueue copyQueue;
+
+			// The vertex layout for the samples' model
+			struct Vertex {
+				glm::vec3 pos;
+				glm::vec3 normal;
+				glm::vec2 uv;
+				glm::vec3 color;
+			};
+
+			// Single vertex buffer for all primitives
+			struct {
+				VkBuffer buffer;
+				VkDeviceMemory memory;
+			} vertices;
+
+			// Single index buffer for all primitives
+			struct {
+				int count;
+				VkBuffer buffer;
+				VkDeviceMemory memory;
+			} indices;
+
+			struct Node;
+
+			// A primitive contains the data for a single draw call
+			struct Primitive {
+				uint32_t firstIndex;
+				uint32_t indexCount;
+				int32_t materialIndex;
+			};
+
+			struct Mesh {
+				std::vector<Primitive> primitives;
+			};
+
+			struct Node {
+				Node* parent = nullptr;
+				std::vector<Node> children;
+				Mesh mesh;
+				glm::mat4 localMatrix;
+			};
+
+			struct Material {
+				glm::vec4 baseColorFactor = glm::vec4(1.0f);
+				uint32_t baseColorTextureIndex;
+			};
+
+			struct Image {
+			    std::unique_ptr<Texture2D> texture;
+				// We also store (and create) a descriptor set that's used to access this texture from the fragment shader
+				VkDescriptorSet descriptorSet;
+			};
+
+			struct Texture {
+				int32_t imageIndex;
+			};
+
+			/*
+				Model data
+			*/
+			std::vector<Image> images;
+			std::vector<Texture> textures;
+			std::vector<Material> materials;
+			std::vector<Node> nodes;
+
+			~GLTFModel();
+
+			void loadTextures(const tinygltf::Model& input);
+			void loadMaterials(const tinygltf::Model& input);
+			void loadImages(const tinygltf::Model& input);
 		};
 	}
 }
