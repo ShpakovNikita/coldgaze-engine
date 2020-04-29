@@ -18,6 +18,8 @@
 #include "Core/InputHandler.hpp"
 #include "Core/Window.hpp"
 #include "Render/Vulkan/Initializers.hpp"
+#include <thread>
+#include <algorithm>
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -52,18 +54,21 @@ void CG::Engine::Run()
 	if (isRunning)
 	{
 		Prepare();
-
-		previousTime = std::chrono::steady_clock::now();
 	}
+
+	auto previousTime = std::chrono::steady_clock::now();
 
     while (isRunning)
 	{
 		auto currentTime = std::chrono::steady_clock::now();
 		auto elapsedTime = currentTime - previousTime;
-
 		float deltaTime = elapsedTime.count() / (1000.0f * 1000.0f * 1000.0f);
 
         MainLoop(deltaTime);
+
+		float minSecPerFrame = 1.0f / engineConfig.fpsLimit;
+		std::chrono::milliseconds timeToSleep(std::max(0, static_cast<int>((minSecPerFrame - deltaTime) * 1000.0f)));
+		std::this_thread::sleep_for(timeToSleep);
 
 		previousTime = currentTime;
     }
@@ -319,18 +324,10 @@ bool CG::Engine::CreateDevices()
 		}
 	}
 
-	// TODO: use later
-	VkPhysicalDeviceProperties deviceProperties;
-	VkPhysicalDeviceFeatures deviceFeatures;
-
     std::vector<const char*> enabledDeviceExtensions;
 	void* deviceCreatepNextChain = nullptr;
 
 	vkPhysicalDevice = physicalDevices[selectedDevice];
-
-	vkGetPhysicalDeviceProperties(vkPhysicalDevice, &deviceProperties);
-	vkGetPhysicalDeviceFeatures(vkPhysicalDevice, &deviceFeatures);
-	vkGetPhysicalDeviceMemoryProperties(vkPhysicalDevice, &deviceMemoryProperties);
 
 	VkPhysicalDeviceFeatures enabledFeatures = GetEnabledDeviceFeatures();
 

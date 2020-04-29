@@ -1,3 +1,5 @@
+#pragma once
+
 #include "entt/entity/fwd.hpp"
 
 union SDL_Event;
@@ -8,5 +10,6 @@ public:
 	virtual ~ICGSystem() = default;
 
 	virtual void Update(float deltaTime, entt::registry& registry) = 0;
-	virtual void InputUpdate(float deltaTime, entt::registry& registry, const SDL_Event& event) = 0;
+	virtual void InputUpdate([[ maybe_unused ]] float deltaTime, 
+		[[ maybe_unused ]] entt::registry& registry, [[ maybe_unused ]] const SDL_Event& event) {};
 };

@@ -13,6 +13,7 @@
 #include <memory>
 #include "Render\Vulkan\ImGuiImpl.hpp"
 #include "imgui\imgui.h"
+#include "ECS\Systems\LightSystem.hpp"
 
 using namespace CG;
 
@@ -98,8 +99,6 @@ void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 
 void CG::TriangleEngine::PrepareVertices()
 {
-	using namespace STriangleEngine;
-
 	VkDevice device = vkDevice->logicalDevice;
 
 	std::vector<Vertex> vertexBuffer =
@@ -514,7 +513,12 @@ void CG::TriangleEngine::SetupCamera()
 
 	uniformBufferVS = &component.uniformBufferVS;
 
-	systems.push_back(std::move(std::make_unique<CameraSystem>()));
+	auto cameraSystem = std::make_unique<CameraSystem>();
+	cameraSystem->SetDevice(vkDevice);
+	systems.push_back(std::move(cameraSystem));
+
+	auto lightSystem = std::make_unique<LightSystem>();
+	systems.push_back(std::move(lightSystem));
 }
 
 void CG::TriangleEngine::PrepareImgui()

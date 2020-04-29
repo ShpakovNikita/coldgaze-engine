@@ -85,7 +85,6 @@ namespace CG
         VkPipelineCache pipelineCache = {};
         std::vector<VkFramebuffer> frameBuffers;
         VkSubmitInfo submitInfo = {};
-		VkPhysicalDeviceMemoryProperties deviceMemoryProperties = {};
 
         struct {
             // Swap chain image presentation
@@ -161,7 +160,6 @@ namespace CG
 		VkShaderModule LoadSPIRVShader(const std::string& filename) const;
 
         bool isRunning = false;
-		std::chrono::time_point<std::chrono::steady_clock> previousTime;
 
 		std::vector<VkShaderModule> shaderModules;
     };

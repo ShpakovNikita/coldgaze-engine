@@ -10,7 +10,7 @@
 
 void CameraSystem::Update(float deltaTime, entt::registry& registry)
 {
-	registry.view<CameraComponent>().each([deltaTime](CameraComponent &cameraComponent)
+	registry.view<CameraComponent>().each([this, deltaTime](CameraComponent &cameraComponent)
 		{
 			if (cameraComponent.input.IsRotating())
 			{
@@ -135,6 +135,11 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 	}
 }
 
+void CameraSystem::SetDevice(const CG::Vk::Device* aVkDevice)
+{
+	vkDevice = aVkDevice;
+}
+
 void CameraSystem::UpdateCameraView(CameraComponent& cameraComponent)
 {
 	CameraComponent::CameraUniforms& uboVS = cameraComponent.uboVS;
@@ -160,7 +165,7 @@ void CameraSystem::UpdateCameraView(CameraComponent& cameraComponent)
 	uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(cameraComponent.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
-void CameraSystem::UpdateUniformBuffers(CameraComponent& cameraComponent)
+void CameraSystem::UpdateUniformBuffers(CameraComponent& cameraComponent) const
 {
 	CameraComponent::CameraUniforms& uboVS = cameraComponent.uboVS;
 	VkDevice device = cameraComponent.vkDevice->logicalDevice;

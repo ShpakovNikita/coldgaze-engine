@@ -2,6 +2,7 @@
 #include "engine.hpp"
 #include <glm/glm.hpp>
 #include "vulkan/vulkan_core.h"
+#include "Render/Vulkan/Model.hpp"
 
 namespace CG { namespace Vk { class ImGuiImpl; } }
 
@@ -28,6 +29,16 @@ namespace CG
 		void Cleanup() override;
 
     private:
+		// Vertex layout for the models
+		CG::Vk::VertexLayout vertexLayout = CG::Vk::VertexLayout(
+			{
+			CG::Vk::VertexComponent::POSITION,
+			CG::Vk::VertexComponent::NORMAL,
+			CG::Vk::VertexComponent::UV,
+			CG::Vk::VertexComponent::COLOR,
+			}
+		);
+
 		struct UISettings {
 			std::array<float, 50> frameTimes{};
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
