@@ -5,8 +5,15 @@
 #include "glm/vec3.hpp"
 #include "glm/vec2.hpp"
 #include "glm/mat4x4.hpp"
+#include <string>
+#include "vulkan/vulkan_core.h"
+#include <memory>
 
-namespace tinygltf { class Model; }
+namespace tinygltf 
+{ 
+	class Node; 
+	class Model;
+}
 
 namespace CG
 {
@@ -80,22 +87,22 @@ namespace CG
 			struct {
 				VkBuffer buffer;
 				VkDeviceMemory memory;
-			} vertices;
+			} vertices = {};
 
 			// Single index buffer for all primitives
 			struct {
 				int count;
 				VkBuffer buffer;
 				VkDeviceMemory memory;
-			} indices;
+			} indices = {};
 
 			struct Node;
 
 			// A primitive contains the data for a single draw call
 			struct Primitive {
-				uint32_t firstIndex;
-				uint32_t indexCount;
-				int32_t materialIndex;
+				uint32_t firstIndex = 0;
+				uint32_t indexCount = 0;
+				int32_t materialIndex = 0;
 			};
 
 			struct Mesh {
@@ -111,18 +118,30 @@ namespace CG
 
 			struct Material {
 				glm::vec4 baseColorFactor = glm::vec4(1.0f);
-				uint32_t baseColorTextureIndex;
+				uint32_t baseColorTextureIndex = 0;
 			};
 
 			struct Image {
 			    std::unique_ptr<Texture2D> texture;
 				// We also store (and create) a descriptor set that's used to access this texture from the fragment shader
-				VkDescriptorSet descriptorSet;
+				VkDescriptorSet descriptorSet = {};
 			};
 
 			struct Texture {
 				int32_t imageIndex;
 			};
+
+			~GLTFModel();
+
+			void LoadFromFile(const std::string& filename);
+
+		private:
+			void LoadTextures(const tinygltf::Model& input);
+			void LoadMaterials(const tinygltf::Model& input);
+			void LoadImages(const tinygltf::Model& input);
+
+			void LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, Node* parent,
+				std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer);
 
 			/*
 				Model data
@@ -131,12 +150,6 @@ namespace CG
 			std::vector<Texture> textures;
 			std::vector<Material> materials;
 			std::vector<Node> nodes;
-
-			~GLTFModel();
-
-			void loadTextures(const tinygltf::Model& input);
-			void loadMaterials(const tinygltf::Model& input);
-			void loadImages(const tinygltf::Model& input);
 		};
 	}
 }

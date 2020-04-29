@@ -5,10 +5,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/framework)
 message(STATUS "Generating project file for ${PROJECT_FOLDER}")
 # Main
 file(GLOB_RECURSE HEADERS *.hpp *.h)
-file(GLOB_RECURSE SOURCE ${HEADERS} *.cpp)
-
+file(GLOB_RECURSE SOURCE ${HEADERS} "*.cpp" "../include/imgui/*.cpp")
 set(MAIN_CPP ${PROJECT_FOLDER}/main.cpp)
-file(GLOB IMGUI_SOURCE "../include/imgui/*.cpp")
 
 # Add shaders
 set(SHADER_DIR "../data/shaders/${PROJECT_NAME}")
@@ -22,11 +20,11 @@ endif()
 if(WIN32)
     set(COLDGAZE_LIBRARIES "")
 
-    add_executable(${PROJECT_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${IMGUI_SOURCE} ${SHADERS})
+    add_executable(${PROJECT_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${SHADERS})
     source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
     target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${ASSIMP_LIBRARIES} ${WINLIBS} ${GLFW_LIBRARIES} ${COLDGAZE_LIBRARIES} ${SDL2_LIBRARY})
 else(WIN32)
-    add_executable(${PROJECT_NAME} ${MAIN_CPP} ${SOURCE} ${IMGUI_SOURCE} ${SHADERS} ${SDL2_LIBRARY})
+    add_executable(${PROJECT_NAME} ${MAIN_CPP} ${SOURCE} ${SHADERS} ${SDL2_LIBRARY})
     source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
     target_link_libraries(${PROJECT_NAME})
 endif(WIN32)

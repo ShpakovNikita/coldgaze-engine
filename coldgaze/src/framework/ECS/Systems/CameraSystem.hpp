@@ -25,7 +25,7 @@ private:
 
 	void UpdateUniformBuffers(CameraComponent& cameraComponent) const;
 
-	entt::entity activeCameraEntity;
+	entt::entity activeCameraEntity = {};
 
-	const CG::Vk::Device* vkDevice;
+	const CG::Vk::Device* vkDevice = nullptr;
 };
