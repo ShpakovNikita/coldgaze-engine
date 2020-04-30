@@ -14,6 +14,12 @@ set(NAME Coldgaze)
 
 project(${NAME})
 
+include_directories("include")
+include_directories("include/glm")
+include_directories("include/entt/src")
+include_directories("include/tinygltf")
+include_directories("include/imgui")
+
 # Use FindVulkan module added with CMAKE 3.7
 if(NOT CMAKE_VERSION VERSION_LESS 3.7.0)
 	message(STATUS "Using module to find Vulkan")
@@ -68,13 +74,6 @@ if (NOT SDL2_FOUND)
 else()
 	message(STATUS ${SDL2_LIBRARY})
 endif()
-
-include_directories("include")
-include_directories("include/glm")
-include_directories("include/entt/src")
- 
-include_directories("include/tinygltf")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DTINYGLTF_USE_CPP14")
 
 # Set preprocessor defines
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNOMINMAX -D_USE_MATH_DEFINES ")
