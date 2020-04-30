@@ -68,7 +68,9 @@ void CG::TriangleEngine::Prepare()
 
 void CG::TriangleEngine::Cleanup()
 {
+	testModel = nullptr;
 	imGui = nullptr;
+
 	Engine::Cleanup();
 }
 
@@ -562,5 +564,8 @@ void CG::TriangleEngine::BuildUiCommandBuffers()
 void CG::TriangleEngine::LoadModel()
 {
 	testModel = std::make_unique<Vk::GLTFModel>();
+	testModel->vkDevice = vkDevice;
+	testModel->queue = queue;
+
 	testModel->LoadFromFile(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 }
