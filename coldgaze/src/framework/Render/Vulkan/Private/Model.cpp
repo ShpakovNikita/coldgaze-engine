@@ -1,4 +1,10 @@
 #include "Render/Vulkan/Model.hpp"
+
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STBI_MSC_SECURE_CRT
+
 #include "tinygltf/tiny_gltf.h"
 #include <glm/gtc/type_ptr.hpp>
 #include "Render/Vulkan/Device.hpp"
