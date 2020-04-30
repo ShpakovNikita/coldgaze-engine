@@ -8,6 +8,8 @@
 #include <string>
 #include "vulkan/vulkan_core.h"
 #include <memory>
+#include "Buffer.hpp"
+#include "Texture2D.hpp"
 
 namespace tinygltf 
 { 
@@ -73,7 +75,7 @@ namespace CG
 		{
 		public:
 			Device* vkDevice = nullptr;
-			VkQueue copyQueue;
+			VkQueue queue;
 
 			// The vertex layout for the samples' model
 			struct Vertex {
@@ -84,16 +86,12 @@ namespace CG
 			};
 
 			// Single vertex buffer for all primitives
-			struct {
-				VkBuffer buffer;
-				VkDeviceMemory memory;
-			} vertices = {};
+			Buffer vertices = {};
 
 			// Single index buffer for all primitives
 			struct {
 				int count;
-				VkBuffer buffer;
-				VkDeviceMemory memory;
+				Buffer buffer;
 			} indices = {};
 
 			struct Node;

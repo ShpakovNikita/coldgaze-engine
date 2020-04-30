@@ -17,8 +17,8 @@ void CG::Vk::Texture2D::FromBuffer(
 	VkImageLayout aImageLayout /*= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL*/)
 {
 	vkDevice = device;
-	width = width;
-	height = height;
+	width = texWidth;
+	height = texHeight;
 	mipLevels = 1;
 	imageLayout = aImageLayout;
 

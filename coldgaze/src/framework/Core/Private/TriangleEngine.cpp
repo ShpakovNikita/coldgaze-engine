@@ -14,6 +14,7 @@
 #include "Render\Vulkan\ImGuiImpl.hpp"
 #include "imgui\imgui.h"
 #include "ECS\Systems\LightSystem.hpp"
+#include "Render\Vulkan\Model.hpp"
 
 using namespace CG;
 
@@ -54,6 +55,7 @@ void CG::TriangleEngine::RenderFrame(float deltaTime)
 void CG::TriangleEngine::Prepare()
 {
     Engine::Prepare();
+	LoadModel();
 	InitRayTracing();
 	SetupCamera();
     PrepareVertices();
@@ -555,4 +557,10 @@ void CG::TriangleEngine::BuildUiCommandBuffers()
 {
 	DrawUI();
 	imGui->UpdateBuffers();
+}
+
+void CG::TriangleEngine::LoadModel()
+{
+	testModel = std::make_unique<Vk::GLTFModel>();
+	testModel->LoadFromFile(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 }

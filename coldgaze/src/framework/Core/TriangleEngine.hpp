@@ -4,13 +4,13 @@
 #include "vulkan/vulkan_core.h"
 #include "Render/Vulkan/Model.hpp"
 
-namespace CG { namespace Vk { class ImGuiImpl; } }
-
 namespace CG 
 {
 	namespace Vk 
 	{
 		struct UniformBufferVS;
+		class GLTFModel;
+		class ImGuiImpl;
 	}
 	struct EngineConfig; 
 }
@@ -61,6 +61,8 @@ namespace CG
 		void DrawUI();
 		void BuildUiCommandBuffers();
 
+		void LoadModel();
+
 		// Vertex buffer and attributes
 		struct 
 		{
@@ -85,5 +87,7 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		std::unique_ptr<Vk::ImGuiImpl> imGui;
+
+		std::unique_ptr<Vk::GLTFModel> testModel;
     };
 }
