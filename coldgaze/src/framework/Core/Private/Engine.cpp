@@ -20,6 +20,7 @@
 #include "Render/Vulkan/Initializers.hpp"
 #include <thread>
 #include <algorithm>
+#include "Render/Vulkan/ImGuiImpl.hpp"
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -113,6 +114,7 @@ void CG::Engine::Prepare()
 	SetupRenderPass();
 	CreatePipelineCache();
 	SetupFrameBuffer();
+	PrepareImgui();
 }
 
 VkShaderModule CG::Engine::LoadSPIRVShader(const std::string& filename) const
@@ -730,5 +732,12 @@ void CG::Engine::UpdateSystems(float deltaTime)
 	{
 		system->Update(deltaTime, registry);
 	}
+}
+
+void CG::Engine::PrepareImgui()
+{
+	imGui = std::make_unique<Vk::ImGuiImpl>(*this);
+	imGui->Init(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
+	imGui->InitResources(renderPass, queue);
 }
 

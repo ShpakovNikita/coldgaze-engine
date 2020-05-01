@@ -32,7 +32,7 @@ void CG::TriangleEngine::RenderFrame(float deltaTime)
 
 	imGui->UpdateUI(deltaTime);
 
-	RenderScene();
+	BuildCommandBuffers();
 
 	// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
 	VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -57,11 +57,10 @@ void CG::TriangleEngine::Prepare()
     Engine::Prepare();
 	LoadModel();
 	InitRayTracing();
-	SetupCamera();
+	SetupECS();
     PrepareVertices();
 	SetupDescriptorSetLayout();
 	PreparePipelines();
-	PrepareImgui();
 	SetupDescriptorPool();
 	BuildCommandBuffers();
 }
@@ -394,7 +393,7 @@ void CG::TriangleEngine::BuildCommandBuffers()
 	cmdBufInfo.pNext = nullptr;
 
 	VkClearValue clearValues[2];
-	clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 1.0f } };
+	clearValues[0].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
@@ -408,65 +407,7 @@ void CG::TriangleEngine::BuildCommandBuffers()
 	renderPassBeginInfo.clearValueCount = 2;
 	renderPassBeginInfo.pClearValues = clearValues;
 
-	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
-	{
-		renderPassBeginInfo.framebuffer = frameBuffers[i];
-
-		VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
-		vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		VkViewport viewport = {};
-		viewport.height = static_cast<float>(engineConfig.height);
-		viewport.width = static_cast<float>(engineConfig.width);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
-
-		VkRect2D scissor = {};
-		scissor.extent.width = engineConfig.width;
-		scissor.extent.height = engineConfig.height;
-		scissor.offset.x = 0;
-		scissor.offset.y = 0;
-		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
-
-		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-		VkDeviceSize offsets[1] = { 0 };
-		vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &vertices.buffer, offsets);
-		vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-		vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
-
-		vkCmdEndRenderPass(drawCmdBuffers[i]);
-
-		VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
-	}
-}
-
-void CG::TriangleEngine::RenderScene()
-{
-	VkCommandBufferBeginInfo cmdBufInfo = {};
-	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	cmdBufInfo.pNext = nullptr;
-
-	VkClearValue clearValues[2];
-	clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 1.0f } };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-
-	VkRenderPassBeginInfo renderPassBeginInfo = {};
-	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassBeginInfo.pNext = nullptr;
-	renderPassBeginInfo.renderPass = renderPass;
-	renderPassBeginInfo.renderArea.offset.x = 0;
-	renderPassBeginInfo.renderArea.offset.y = 0;
-	renderPassBeginInfo.renderArea.extent.width = engineConfig.width;
-	renderPassBeginInfo.renderArea.extent.height = engineConfig.height;
-	renderPassBeginInfo.clearValueCount = 2;
-	renderPassBeginInfo.pClearValues = clearValues;
-
-	DrawUI();
-
-	imGui->UpdateBuffers();
+	BuildUiCommandBuffers();
 
 	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
 	{
@@ -505,7 +446,7 @@ void CG::TriangleEngine::RenderScene()
 	}
 }
 
-void CG::TriangleEngine::SetupCamera()
+void CG::TriangleEngine::SetupECS()
 {
 	auto cameraEntity = registry.create();
 	CameraComponent &component = registry.assign<CameraComponent>(cameraEntity);
@@ -525,31 +466,24 @@ void CG::TriangleEngine::SetupCamera()
 	systems.push_back(std::move(lightSystem));
 }
 
-void CG::TriangleEngine::PrepareImgui()
-{
-	imGui = std::make_unique<Vk::ImGuiImpl>(*this);
-	imGui->Init(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
-	imGui->InitResources(renderPass, queue);
-}
-
 void CG::TriangleEngine::DrawUI()
 {
 	ImGui::NewFrame();
 
-	// Init imGui windows and elements
+	if (uiData.isActive)
+	{
+		// Init imGui windows and elements
+		ImGui::Begin("Coldgaze overlay", &uiData.isActive, ImGuiWindowFlags_MenuBar);
 
-	ImVec4 clear_color = ImColor(114, 144, 154);
-	static float f = 0.0f;
-	ImGui::TextUnformatted("One");
-	ImGui::TextUnformatted("Two");
+		// Edit a color (stored as ~4 floats)
+		ImGui::ColorEdit4("Background", &uiData.bgColor.x, ImGuiColorEditFlags_NoInputs);
 
-	ImGui::Text("Camera");
-	ImGui::SetNextWindowSize(ImVec2(200, 200));
-	ImGui::Begin("Example settings");
-	ImGui::End();
+		// Plot some values
+		const float dummyData[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
+		ImGui::PlotLines("Frame Times", dummyData, IM_ARRAYSIZE(dummyData));
 
-	ImGui::SetNextWindowPos(ImVec2(650, 20));
-	ImGui::ShowDemoWindow();
+		ImGui::End();
+	}
 
 	// Render to generate draw buffers
 	ImGui::Render();

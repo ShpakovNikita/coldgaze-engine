@@ -42,7 +42,9 @@ namespace CG
 		struct UISettings {
 			std::array<float, 50> frameTimes{};
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
-		} uiSettings;
+			glm::vec4 bgColor = { 0.0f, 0.0f, 0.2f, 1.0f };
+			bool isActive = true;
+		} uiData;
 
 		VkCommandBuffer GetReadyCommandBuffer(); 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
@@ -51,12 +53,10 @@ namespace CG
         void SetupDescriptorSetLayout();
 		void PreparePipelines();
 		void SetupDescriptorPool();
+
 		void BuildCommandBuffers();
 
-		void RenderScene();
-
-		void SetupCamera();
-		void PrepareImgui();
+		void SetupECS();
 
 		void DrawUI();
 		void BuildUiCommandBuffers();
@@ -85,8 +85,6 @@ namespace CG
 		VkPipeline pipeline = {};
 		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-
-		std::unique_ptr<Vk::ImGuiImpl> imGui;
 
 		std::unique_ptr<Vk::GLTFModel> testModel;
     };

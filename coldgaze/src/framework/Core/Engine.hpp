@@ -27,6 +27,7 @@ namespace CG
     {
         class SwapChain;
         class Device;
+		class ImGuiImpl;
     }
     struct EngineConfig;
 	class InputHandler;
@@ -107,6 +108,8 @@ namespace CG
 		// active frame buffer index
 		uint32_t currentBuffer = 0;
 
+		std::unique_ptr<Vk::ImGuiImpl> imGui;
+
 		std::unique_ptr<InputHandler> inputHandler;
 		std::unique_ptr<Window> currentWindow;
 
@@ -155,6 +158,8 @@ namespace CG
 
 		bool SetupDependencies();
 		void UpdateSystems(float deltaTime);
+
+		void PrepareImgui();
 
 		// TODO: move to some renderer interface
 		VkShaderModule LoadSPIRVShader(const std::string& filename) const;
