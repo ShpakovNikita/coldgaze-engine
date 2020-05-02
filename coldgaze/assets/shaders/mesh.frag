@@ -20,6 +20,6 @@ void main()
     vec3 R = reflect(L, N);
     vec3 ambient = color.rgb * vec3(0.5);
 	vec3 diffuse = dot(N, -L) * 0.3 * inColor;
-	vec3 specular = pow(max(dot(R, V), 0.0), 2.0) * vec3(0.5);
+	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * vec3(0.75);
 	outFragColor = vec4(ambient + diffuse + specular, 1.0);	
 }

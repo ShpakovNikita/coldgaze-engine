@@ -45,8 +45,23 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 	{
 		if (handled)
 		{
-			float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 100.0f;
-			component.movementSpeed = glm::clamp(speedDelta, 0.0f, 1.0f);
+			switch (component.cameraType)
+			{
+			case CameraComponent::CameraType::LOOK_AT:
+			{
+				component.zoom = glm::clamp(component.zoom + event.wheel.y * deltaTime * 10.0f, 0.0f, 5.0f);
+				component.position = glm::vec3(0.0f, 0.0f, -component.zoom);
+			}
+			break;
+			case CameraComponent::CameraType::FIRST_PERSON:
+			{
+				float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 100.0f;
+				component.movementSpeed = glm::clamp(speedDelta, 0.0f, 1.0f);
+			}
+			break;
+			default:
+				break;
+			}
 		}
 	}
 	break;
@@ -155,14 +170,17 @@ void CameraSystem::UpdateCameraView(CameraComponent& cameraComponent)
 
 	translationMatrix = glm::translate(glm::mat4(1.0f), cameraComponent.position);
 
-	// Applying from right to left
-	uboVS.viewMatrix = rotationMatrix * translationMatrix;
-
-	// TODO: remove from camera
-	uboVS.modelMatrix = glm::mat4(1.0f);
-	uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(cameraComponent.rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
-	uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(cameraComponent.rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
-	uboVS.modelMatrix = glm::rotate(uboVS.modelMatrix, glm::radians(cameraComponent.rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+	switch (cameraComponent.cameraType)
+	{
+	case CameraComponent::CameraType::LOOK_AT:
+		uboVS.viewMatrix = translationMatrix * rotationMatrix;
+		break;
+	case CameraComponent::CameraType::FIRST_PERSON:
+		uboVS.viewMatrix = rotationMatrix * translationMatrix;
+		break;
+	default:
+		break;
+	}
 }
 
 void CameraSystem::UpdateUniformBuffers(CameraComponent& cameraComponent) const
