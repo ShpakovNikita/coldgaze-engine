@@ -277,7 +277,7 @@ void CG::TriangleEngine::PrepareUniformBuffers()
 
 	uniformBufferVS = &component.uniformBufferVS;
 
-	camComp = &component;
+	cameraComponent = &component;
 
 	VK_CHECK_RESULT(vkDevice->CreateBuffer(
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -293,8 +293,8 @@ void CG::TriangleEngine::PrepareUniformBuffers()
 
 void CG::TriangleEngine::UpdateUniformBuffers()
 {
-	uboData.projection = camComp->uboVS.projectionMatrix;
-	uboData.view = camComp->uboVS.viewMatrix;
+	uboData.projection = cameraComponent->uboVS.projectionMatrix;
+	uboData.view = cameraComponent->uboVS.viewMatrix;
 	ubo.CopyTo(&uboData, sizeof(uboData));
 }
 

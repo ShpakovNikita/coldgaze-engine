@@ -7,13 +7,12 @@
 #include "Core/TriangleEngine.hpp"
 
 int main(int argc, char* argv[]) {
-/*
+
 #if WIN32
 	AllocConsole();
 	freopen("CONOUT$", "w", stdout);
 	freopen("CONOUT$", "w", stderr);
 #endif
-*/
 
     CG::EngineConfig engine_config = { 1280, 720 };
 	for (size_t i = 0; i < argc; i++) { engine_config.args.push_back(argv[i]); };

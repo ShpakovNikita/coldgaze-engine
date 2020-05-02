@@ -12,6 +12,7 @@
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 
 struct SDL_Window;
+struct CameraComponent;
 class ICGSystem;
 union SDL_Event;
 
@@ -64,6 +65,8 @@ namespace CG
         virtual void RenderFrame(float deltaTime);
         virtual void Prepare();
 		virtual void Cleanup();
+
+		virtual void BuildCommandBuffers();
 
 		// Frame utils
 		void PrepareFrame();
@@ -119,6 +122,8 @@ namespace CG
 		void InitRayTracing();
 		VkPhysicalDeviceRayTracingPropertiesNV rayTracingProperties;
 
+		CameraComponent* cameraComponent = nullptr;
+
     private:
         bool Init();
         void MainLoop(float deltaTime);
@@ -160,6 +165,8 @@ namespace CG
 		void UpdateSystems(float deltaTime);
 
 		void PrepareImgui();
+
+		void WindowResize();
 
 		// TODO: move to some renderer interface
 		VkShaderModule LoadSPIRVShader(const std::string& filename) const;

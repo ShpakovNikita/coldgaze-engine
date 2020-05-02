@@ -31,6 +31,8 @@ namespace CG
 
 			void UpdateUI(float deltaTime);
 
+			void Resize(float width, float height);
+
 		private:
 			Engine& engine;
 			const Vk::Device* device;

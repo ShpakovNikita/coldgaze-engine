@@ -69,7 +69,7 @@ namespace CG
 		void DrawUI();
 
 		void BuildUiCommandBuffers();
-		void BuildCommandBuffers();
+		void BuildCommandBuffers() override;
 
 		void SetupDescriptors();
 
@@ -88,7 +88,5 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		std::unique_ptr<Vk::GLTFModel> testModel;
-
-		CameraComponent* camComp = nullptr;
     };
 }

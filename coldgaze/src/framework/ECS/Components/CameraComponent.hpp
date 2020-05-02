@@ -48,4 +48,6 @@ struct CameraComponent
 	float sensitivity = 0.5f;
 
 	bool isActive = true;
+
+	void UpdateViewport(uint32_t width, uint32_t height);
 };

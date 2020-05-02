@@ -21,6 +21,7 @@
 #include <thread>
 #include <algorithm>
 #include "Render/Vulkan/ImGuiImpl.hpp"
+#include "ECS/Components/CameraComponent.hpp"
 
 const std::vector<const char*> validationLayers = {
 	"VK_LAYER_LUNARG_standard_validation",
@@ -180,7 +181,11 @@ void CG::Engine::MainLoop(float deltaTime)
 {
     PollEvents(deltaTime);
 	UpdateSystems(deltaTime);
-	RenderFrame(deltaTime);
+
+	if (currentWindow->isShown)
+	{
+		RenderFrame(deltaTime);
+	}
 }
 
 void CG::Engine::Cleanup()
@@ -200,6 +205,8 @@ void CG::Engine::Cleanup()
 	CleanupSDL();
 }
 
+void CG::Engine::BuildCommandBuffers() {}
+
 void CG::Engine::HandleSystemInput(const SDL_Event& event)
 {
 	inputHandler->AddEvent(event);
@@ -208,7 +215,20 @@ void CG::Engine::HandleSystemInput(const SDL_Event& event)
 	{
 	case SDL_WINDOWEVENT:
 	{
-		// pass
+		switch (event.window.event)
+		{
+		case SDL_WINDOWEVENT_SHOWN:
+			currentWindow->isShown = true;
+			break;
+		case SDL_WINDOWEVENT_MINIMIZED:
+			currentWindow->isShown = false;
+			break;
+		case SDL_WINDOWEVENT_RESTORED:
+			currentWindow->isShown = true;
+			break;
+		default:
+			break;
+		}
 	}
 	break;
 
@@ -245,7 +265,7 @@ bool CG::Engine::InitWindow()
         engineConfig.engine_name.c_str(),
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         engineConfig.width, engineConfig.height,
-        SDL_WINDOW_VULKAN
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE
     );
 
     return window != nullptr;
@@ -581,12 +601,31 @@ void CG::Engine::SetupFrameBuffer()
 
 void CG::Engine::PrepareFrame()
 {
-	VK_CHECK_RESULT(vkSwapChain->AcquireNextImage(semaphores.presentComplete, &currentBuffer));
+	VkResult result = vkSwapChain->AcquireNextImage(semaphores.presentComplete, &currentBuffer);
+
+	if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
+		WindowResize();
+	}
+	else {
+		VK_CHECK_RESULT(result);
+	}
 }
 
 void CG::Engine::SubmitFrame()
 {
-	VK_CHECK_RESULT(vkSwapChain->QueuePresent(queue, currentBuffer, semaphores.renderComplete));
+	VkResult result = vkSwapChain->QueuePresent(queue, currentBuffer, semaphores.renderComplete);
+
+	if (!((result == VK_SUCCESS) || (result == VK_SUBOPTIMAL_KHR))) {
+		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+			// Swap chain is no longer compatible with the surface and needs to be recreated
+			WindowResize();
+			return;
+		}
+		else {
+			VK_CHECK_RESULT(result);
+		}
+	}
+
 	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 }
 
@@ -740,5 +779,35 @@ void CG::Engine::PrepareImgui()
 	imGui = std::make_unique<Vk::ImGuiImpl>(*this);
 	imGui->Init(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
 	imGui->InitResources(renderPass, queue);
+}
+
+void CG::Engine::WindowResize()
+{
+	vkDeviceWaitIdle(vkDevice->logicalDevice);
+
+	// TODO: recreate swapchain with new size and update camera ratio
+
+	SetupSwapChain();
+
+	vkDestroyImageView(vkDevice->logicalDevice, depthStencil.view, nullptr);
+	vkDestroyImage(vkDevice->logicalDevice, depthStencil.image, nullptr);
+	vkFreeMemory(vkDevice->logicalDevice, depthStencil.mem, nullptr);
+	SetupDepthStencil();
+	for (uint32_t i = 0; i < frameBuffers.size(); i++) 
+	{
+		vkDestroyFramebuffer(vkDevice->logicalDevice, frameBuffers[i], nullptr);
+	}
+	SetupFrameBuffer();
+
+	DestroyCommandBuffers();
+	CreateCommandBuffers();
+	BuildCommandBuffers();
+
+	vkDeviceWaitIdle(vkDevice->logicalDevice);
+
+	if ((engineConfig.width > 0.0f) && (engineConfig.height > 0.0f)) {
+		imGui->Resize(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
+		cameraComponent->UpdateViewport(engineConfig.width, engineConfig.height);
+	}
 }
 

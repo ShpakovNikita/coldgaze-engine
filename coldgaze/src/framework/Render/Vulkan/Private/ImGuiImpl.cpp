@@ -30,8 +30,9 @@ CG::Vk::ImGuiImpl::~ImGuiImpl()
 
 void CG::Vk::ImGuiImpl::Init(float width, float height)
 {
+	Resize(width, height);
+
 	ImGuiIO& io = ImGui::GetIO();
-	io.DisplaySize = ImVec2(width, height);
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 }
 
@@ -353,4 +354,10 @@ void CG::Vk::ImGuiImpl::UpdateUI(float deltaTime)
 	io.MousePos = ImVec2(inputHandler->mouseInput.mousePos.x, inputHandler->mouseInput.mousePos.y);
 	io.MouseDown[0] = inputHandler->mouseInput.left;
 	io.MouseDown[1] = inputHandler->mouseInput.right;
+}
+
+void CG::Vk::ImGuiImpl::Resize(float width, float height)
+{
+	ImGuiIO& io = ImGui::GetIO();
+	io.DisplaySize = ImVec2(width, height);
 }
