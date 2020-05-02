@@ -37,6 +37,7 @@ namespace CG
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
 			glm::vec4 bgColor = { 0.0f, 0.0f, 0.2f, 1.0f };
 			bool isActive = true;
+			bool drawWire = false;
 		} uiData = {};
 
 		struct ShaderUniformData
@@ -81,7 +82,6 @@ namespace CG
 
 		VkPipelineLayout pipelineLayout = {};
 		VkDescriptorSetLayout descriptorSetLayout = {};
-		VkPipeline pipeline = {};
 		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 

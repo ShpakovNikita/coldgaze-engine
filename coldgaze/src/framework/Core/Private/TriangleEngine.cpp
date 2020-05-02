@@ -161,6 +161,18 @@ void CG::TriangleEngine::BuildCommandBuffers()
 
 	BuildUiCommandBuffers();
 
+	VkViewport viewport = {};
+	viewport.height = static_cast<float>(engineConfig.height);
+	viewport.width = static_cast<float>(engineConfig.width);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.extent.width = engineConfig.width;
+	scissor.extent.height = engineConfig.height;
+	scissor.offset.x = 0;
+	scissor.offset.y = 0;
+
 	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
 	{
 		renderPassBeginInfo.framebuffer = frameBuffers[i];
@@ -168,27 +180,13 @@ void CG::TriangleEngine::BuildCommandBuffers()
 		VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
 		vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-		VkViewport viewport = {};
-		viewport.height = static_cast<float>(engineConfig.height);
-		viewport.width = static_cast<float>(engineConfig.width);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
 		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
-
-		VkRect2D scissor = {};
-		scissor.extent.width = engineConfig.width;
-		scissor.extent.height = engineConfig.height;
-		scissor.offset.x = 0;
-		scissor.offset.y = 0;
 		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
 		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solid);
 
-		// VkDeviceSize offsets[1] = { 0 };
-		// vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &vertices.buffer, offsets);
-		// vkCmdBindIndexBuffer(drawCmdBuffers[i], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-		// vkCmdDrawIndexed(drawCmdBuffers[i], indices.count, 1, 0, 0, 1);
+		// testModel->Draw(drawCmdBuffers[i], pipelineLayout);
 
 		imGui->DrawFrame(drawCmdBuffers[i]);
 
@@ -238,14 +236,14 @@ void CG::TriangleEngine::SetupDescriptors()
 	pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 	VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
-	const VkDescriptorSetAllocateInfo matricesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, { descriptorSetLayouts.matrices });
+	const VkDescriptorSetAllocateInfo matricesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.matrices, 1);
 	VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &matricesAllocInfo, &descriptorSet));
 	VkWriteDescriptorSet matricesWriteDescriptorSet = Vk::Initializers::WriteDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &ubo.descriptor);
 	vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &matricesWriteDescriptorSet, 0, nullptr);
 
 	for (auto& image : testModel->GetImages())
 	{
-		const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, { descriptorSetLayouts.textures });
+		const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &image.descriptorSet));
 		VkWriteDescriptorSet texturesWriteDescriptorSet = Vk::Initializers::WriteDescriptorSet(image.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &image.texture->descriptor);
 		vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &texturesWriteDescriptorSet, 0, nullptr);
@@ -258,13 +256,22 @@ void CG::TriangleEngine::PrepareUniformBuffers()
 	CameraComponent& component = registry.assign<CameraComponent>(cameraEntity);
 
 	component.vkDevice = vkDevice;
-	component.uniformBufferVS.PrepareUniformBuffers(vkDevice, sizeof(component.uboVS));
+	// component.uniformBufferVS.PrepareUniformBuffers(vkDevice, sizeof(component.uboVS));
 	component.viewport.height = engineConfig.height;
 	component.viewport.width = engineConfig.width;
 
 	uniformBufferVS = &component.uniformBufferVS;
 
 	camComp = &component;
+
+	VK_CHECK_RESULT(vkDevice->CreateBuffer(
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		&ubo,
+		sizeof(uboData)));
+
+	// Map persistent
+	VK_CHECK_RESULT(ubo.Map());
 
 	UpdateUniformBuffers();
 }
@@ -273,7 +280,7 @@ void CG::TriangleEngine::UpdateUniformBuffers()
 {
 	uboData.projection = camComp->uboVS.projectionMatrix;
 	uboData.view = camComp->uboVS.viewMatrix;
-	uniformBufferVS->buffer.CopyTo(&uboData, sizeof(uboData));
+	ubo.CopyTo(&uboData, sizeof(uboData));
 }
 
 void CG::TriangleEngine::SetupSystems()
