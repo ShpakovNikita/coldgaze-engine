@@ -60,7 +60,7 @@ void CG::TriangleEngine::Prepare()
 {
     Engine::Prepare();
 	LoadModel();
-	InitRayTracing();
+	// InitRayTracing();
 	SetupSystems();
 
 	PrepareUniformBuffers();

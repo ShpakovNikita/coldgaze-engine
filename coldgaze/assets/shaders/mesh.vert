@@ -32,6 +32,6 @@ void main()
 	vec4 pos = uboScene.view * vec4(inPos, 1.0);
 	outNormal = mat3(uboScene.view) * inNormal;
 	vec3 lPos = mat3(uboScene.view) * uboScene.lightPos.xyz;
-	outLightVec = lPos - pos.xyz;
+	outLightVec = pos.xyz - lPos;
 	outViewVec = -pos.xyz;		
 }
