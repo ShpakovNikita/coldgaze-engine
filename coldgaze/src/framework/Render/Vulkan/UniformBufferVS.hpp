@@ -1,5 +1,6 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
+#include "Buffer.hpp"
 
 namespace CG
 {
@@ -9,8 +10,8 @@ namespace CG
 
 		struct UniformBufferVS
 		{
-			VkDeviceMemory memory;
-			VkBuffer buffer;
+			Buffer buffer = {};
+
 			VkDescriptorBufferInfo descriptor;
 
 			void PrepareUniformBuffers(Device* vkDevice, VkDeviceSize size);

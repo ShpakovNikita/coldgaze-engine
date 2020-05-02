@@ -24,6 +24,8 @@ namespace CG
 				VkImageUsageFlags imageUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT,
 				VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
+			VkDescriptorImageInfo descriptor = {};
+
 		private:
 			void UpdateDescriptor();
 
@@ -35,7 +37,6 @@ namespace CG
 			VkImageLayout imageLayout = {};
 			VkSampler sampler = {};
 			VkImageView view = {};
-			VkDescriptorImageInfo descriptor = {};
 		};
 	}
 }

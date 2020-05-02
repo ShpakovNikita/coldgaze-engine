@@ -133,6 +133,11 @@ namespace CG
 
 			void LoadFromFile(const std::string& filename);
 
+			std::vector<Image>& GetImages();
+			const std::vector<Texture>& GetTextures() const;
+			const std::vector<Material>& GetMaterials() const;
+			const std::vector<Node>& GetNodes() const;
+
 		private:
 			void LoadTextures(const tinygltf::Model& input);
 			void LoadMaterials(const tinygltf::Model& input);

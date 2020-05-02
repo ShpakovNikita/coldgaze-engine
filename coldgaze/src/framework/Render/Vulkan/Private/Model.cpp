@@ -101,6 +101,26 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename)
 	indexStaging.Destroy();
 }
 
+std::vector<CG::Vk::GLTFModel::Image>& CG::Vk::GLTFModel::GetImages()
+{
+	return images;
+}
+
+const std::vector<CG::Vk::GLTFModel::Texture>& CG::Vk::GLTFModel::GetTextures() const
+{
+	return textures;
+}
+
+const std::vector<CG::Vk::GLTFModel::Material>& CG::Vk::GLTFModel::GetMaterials() const
+{
+	return materials;
+}
+
+const std::vector<CG::Vk::GLTFModel::Node>& CG::Vk::GLTFModel::GetNodes() const
+{
+	return nodes;
+}
+
 void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)
 {
 	textures.resize(input.textures.size());

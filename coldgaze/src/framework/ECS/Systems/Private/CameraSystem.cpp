@@ -26,7 +26,7 @@ void CameraSystem::Update(float deltaTime, entt::registry& registry)
 
 			if (cameraComponent.isActive)
 			{
-				UpdateUniformBuffers(cameraComponent);
+				// UpdateUniformBuffers(cameraComponent);
 			}
 		}
 	);
@@ -168,14 +168,10 @@ void CameraSystem::UpdateCameraView(CameraComponent& cameraComponent)
 void CameraSystem::UpdateUniformBuffers(CameraComponent& cameraComponent) const
 {
 	CameraComponent::CameraUniforms& uboVS = cameraComponent.uboVS;
-	VkDevice device = cameraComponent.vkDevice->logicalDevice;
 
-	uint8_t* pData;
-	VK_CHECK_RESULT(vkMapMemory(device, cameraComponent.uniformBufferVS.memory, 0, sizeof(uboVS), 0, (void**)& pData));
-	memcpy(pData, &uboVS, sizeof(uboVS));
-
-	// Note: Since we requested a host coherent memory type for the uniform buffer, the write is instantly visible to the GPU, that's why I can use unmap here
-	vkUnmapMemory(device, cameraComponent.uniformBufferVS.memory);
+	cameraComponent.uniformBufferVS.buffer.Map(sizeof(uboVS));
+	cameraComponent.uniformBufferVS.buffer.CopyTo(&uboVS, sizeof(uboVS));
+	cameraComponent.uniformBufferVS.buffer.Unmap();
 }
 
 void CameraSystem::UpdateCameraPosition(CameraComponent& cameraComponent, float deltaTime)

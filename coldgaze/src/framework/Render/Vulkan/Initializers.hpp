@@ -148,6 +148,13 @@ namespace CG
 				return descriptorSetAllocateInfo;
 			}
 
+			inline VkDescriptorSetAllocateInfo DescriptorSetAllocateInfo(
+				VkDescriptorPool descriptorPool,
+				const std::vector<VkDescriptorSetLayout>& pSetLayouts)
+			{
+				return DescriptorSetAllocateInfo(descriptorPool, pSetLayouts.data(), static_cast<uint32_t>(pSetLayouts.size()));
+			}
+
 			inline VkDescriptorImageInfo DescriptorImageInfo(VkSampler sampler, VkImageView imageView, VkImageLayout imageLayout)
 			{
 				VkDescriptorImageInfo descriptorImageInfo{};
@@ -221,6 +228,12 @@ namespace CG
 				return pipelineLayoutCreateInfo;
 			}
 
+			inline VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo(
+				const std::vector<VkDescriptorSetLayout>& pSetLayouts)
+			{
+				return PipelineLayoutCreateInfo(pSetLayouts.data(), static_cast<uint32_t>(pSetLayouts.size()));
+			}
+
 			inline VkPipelineInputAssemblyStateCreateInfo PipelineInputAssemblyStateCreateInfo(
 				VkPrimitiveTopology topology,
 				VkPipelineInputAssemblyStateCreateFlags flags,
@@ -249,6 +262,16 @@ namespace CG
 				pipelineRasterizationStateCreateInfo.depthClampEnable = VK_FALSE;
 				pipelineRasterizationStateCreateInfo.lineWidth = 1.0f;
 				return pipelineRasterizationStateCreateInfo;
+			}
+
+			inline VkPipelineColorBlendAttachmentState PipelineColorBlendAttachmentState(
+				VkColorComponentFlags colorWriteMask,
+				VkBool32 blendEnable)
+			{
+				VkPipelineColorBlendAttachmentState pipelineColorBlendAttachmentState{};
+				pipelineColorBlendAttachmentState.colorWriteMask = colorWriteMask;
+				pipelineColorBlendAttachmentState.blendEnable = blendEnable;
+				return pipelineColorBlendAttachmentState;
 			}
 
 			inline VkPipelineColorBlendStateCreateInfo PipelineColorBlendStateCreateInfo(
