@@ -38,7 +38,7 @@ CG::Engine::Engine(CG::EngineConfig& aEngineConfig)
 
 CG::Engine::~Engine() = default;
 
-VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures()
+VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures() const
 {
 	return {};
 }
@@ -331,9 +331,10 @@ bool CG::Engine::CreateDevices()
 
 	vkPhysicalDevice = physicalDevices[selectedDevice];
 
+    vkDevice = new CG::Vk::Device(vkPhysicalDevice);
+
 	VkPhysicalDeviceFeatures enabledFeatures = GetEnabledDeviceFeatures();
 
-    vkDevice = new CG::Vk::Device(vkPhysicalDevice);
 	VK_CHECK_RESULT(vkDevice->CreateLogicalDevice(enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain));
 
     VkDevice device = vkDevice->logicalDevice;

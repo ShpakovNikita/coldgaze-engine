@@ -60,7 +60,7 @@ namespace CG
 			Vk::Buffer indexBuffer;
 		};
 
-        virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures();
+        virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures() const;
         virtual void RenderFrame(float deltaTime);
         virtual void Prepare();
 		virtual void Cleanup();

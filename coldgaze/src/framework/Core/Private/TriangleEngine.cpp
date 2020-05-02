@@ -30,6 +30,8 @@ CG::TriangleEngine::~TriangleEngine() = default;
 
 void CG::TriangleEngine::RenderFrame(float deltaTime)
 {
+	UpdateUniformBuffers();
+
 	PrepareFrame();
 
 	imGui->UpdateUI(deltaTime);
@@ -76,9 +78,22 @@ void CG::TriangleEngine::Cleanup()
 	Engine::Cleanup();
 }
 
+VkPhysicalDeviceFeatures CG::TriangleEngine::GetEnabledDeviceFeatures() const
+{
+	VkPhysicalDeviceFeatures availableFeatures = vkDevice->features;
+	VkPhysicalDeviceFeatures enabledFeatures = {};
+
+	if (availableFeatures.fillModeNonSolid)
+	{
+		enabledFeatures.fillModeNonSolid = VK_TRUE;
+	}
+
+	return enabledFeatures;
+}
+
 void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 {
-	assert(commandBuffer != VK_NULL_HANDLE);
+	assert(commandBuffer != VK_NULL_HANDLE); 
 
 	vkDevice->FlushCommandBuffer(commandBuffer, queue, true);
 }
@@ -131,7 +146,7 @@ void CG::TriangleEngine::PreparePipelines()
 	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solid));
 
 	// Wire frame rendering pipeline
-	if (vkDevice->features.fillModeNonSolid) {
+	if (vkDevice->enabledFeatures.fillModeNonSolid) {
 		rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_LINE;
 		rasterizationStateCreateInfo.lineWidth = 1.0f;
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.wireframe));
@@ -186,7 +201,7 @@ void CG::TriangleEngine::BuildCommandBuffers()
 		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solid);
 
-		// testModel->Draw(drawCmdBuffers[i], pipelineLayout);
+		testModel->Draw(drawCmdBuffers[i], pipelineLayout);
 
 		imGui->DrawFrame(drawCmdBuffers[i]);
 
@@ -304,6 +319,8 @@ void CG::TriangleEngine::DrawUI()
 
 		// Edit a color (stored as ~4 floats)
 		ImGui::ColorEdit4("Background", &uiData.bgColor.x, ImGuiColorEditFlags_NoInputs);
+
+		ImGui::Checkbox("Wireframe mode", &uiData.drawWire);
 
 		// Plot some values
 		const float dummyData[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };

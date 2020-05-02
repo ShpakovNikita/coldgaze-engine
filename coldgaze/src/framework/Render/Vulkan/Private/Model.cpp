@@ -121,6 +121,51 @@ const std::vector<CG::Vk::GLTFModel::Node>& CG::Vk::GLTFModel::GetNodes() const
 	return nodes;
 }
 
+void CG::Vk::GLTFModel::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
+{
+	VkDeviceSize offsets[1] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	// Render all nodes at top-level
+	for (auto& node : nodes) 
+	{
+		DrawNode(commandBuffer, pipelineLayout, node);
+	}
+}
+
+void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const Node& node)
+{
+	if (node.mesh.primitives.size() > 0)
+	{
+		glm::mat4 worldMatrix = node.localMatrix;
+		const Node* currentParent = node.parent;
+		while (currentParent) 
+		{
+			worldMatrix = currentParent->localMatrix * worldMatrix;
+			currentParent = currentParent->parent;
+		}
+		
+		vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &worldMatrix);
+		for (const Primitive& primitive : node.mesh.primitives) 
+		{
+			if (primitive.indexCount > 0) 
+			{
+				// Get the texture index for this primitive
+				Texture texture = textures[materials[primitive.materialIndex].baseColorTextureIndex];
+
+				// Bind the descriptor for the current primitive's texture
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &images[texture.imageIndex].descriptorSet, 0, nullptr);
+				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
+			}
+		}
+	}
+
+	for (const auto& child : node.children) 
+	{
+		DrawNode(commandBuffer, pipelineLayout, child);
+	}
+}
+
 void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)
 {
 	textures.resize(input.textures.size());

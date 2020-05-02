@@ -138,6 +138,9 @@ namespace CG
 			const std::vector<Material>& GetMaterials() const;
 			const std::vector<Node>& GetNodes() const;
 
+			void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
+			void DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const Node& node);
+
 		private:
 			void LoadTextures(const tinygltf::Model& input);
 			void LoadMaterials(const tinygltf::Model& input);

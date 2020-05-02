@@ -31,6 +31,8 @@ namespace CG
         void Prepare() override;
 		void Cleanup() override;
 
+		VkPhysicalDeviceFeatures GetEnabledDeviceFeatures() const override;
+
     private:
 		struct UISettings {
 			std::array<float, 50> frameTimes{};
