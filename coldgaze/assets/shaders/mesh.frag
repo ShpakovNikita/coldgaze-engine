@@ -14,7 +14,7 @@ layout (location = 6) in vec3 inLightPos;
 
 layout (location = 0) out vec4 outFragColor;
 
-const vec3 LIGHT_COLOR = vec3(1.0);
+const vec3 LIGHT_COLOR = vec3(23.47, 21.31, 20.79);
 const float DIELECTRIC_REFLECTION_APPROXIMATION = 0.04;
 const float PI = 3.14159265359;
 
@@ -62,7 +62,7 @@ vec3 F_Schlick(float cosTheta, vec3 F0)
 float calculateAttenuation(vec3 fragPos, vec3 lightPos)
 {
     float distance = length(fragPos - lightPos);
-    return 1.0;
+    return 1.0 / (distance * distance);
 }
 
 // Result reflection
@@ -133,9 +133,6 @@ void main()
     vec3 ambient = vec3(0.03) * albedo.xyz * occlusion;
     vec3 color = ambient + brdf;   
     
-    // Tone compression 
-    color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));  
     
     outFragColor = vec4(color, 1.0);
 }

@@ -10,6 +10,9 @@
 #include <memory>
 #include "Buffer.hpp"
 #include "Texture2D.hpp"
+#include <vcruntime_exception.h>
+
+namespace std { class mutex; }
 
 namespace tinygltf 
 { 
@@ -74,6 +77,11 @@ namespace CG
 		class GLTFModel
 		{
 		public:
+			struct AssetLoadingException : public std::exception
+			{
+				AssetLoadingException(const char* msg) : std::exception(msg) {}
+			};
+
 			Device* vkDevice = nullptr;
 			VkQueue queue;
 
@@ -132,6 +140,7 @@ namespace CG
 				int32_t imageIndex;
 			};
 
+			GLTFModel(std::mutex* assetLoadingMutex);
 			~GLTFModel();
 
 			void LoadFromFile(const std::string& filename);
@@ -143,6 +152,9 @@ namespace CG
 
 			void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
 			void DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const Node& node);
+
+			bool IsLoaded() const;
+			void SetLoaded(bool loaded);
 
 		private:
 			void LoadTextures(const tinygltf::Model& input);
@@ -159,6 +171,11 @@ namespace CG
 			std::vector<Texture> textures;
 			std::vector<Material> materials;
 			std::vector<Node> nodes;
+
+			// for async loading, TODO: move mutex here
+			bool loaded = false;
+
+			std::mutex* assetLoadingMutex = nullptr;
 		};
 	}
 }

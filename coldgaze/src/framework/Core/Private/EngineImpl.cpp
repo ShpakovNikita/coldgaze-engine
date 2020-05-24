@@ -59,11 +59,12 @@ void CG::EngineImpl::RenderFrame(float deltaTime)
 void CG::EngineImpl::Prepare()
 {
     Engine::Prepare();
-	LoadModel();
+
 	// InitRayTracing();
 	SetupSystems();
 
 	PrepareUniformBuffers();
+	LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 	SetupDescriptors();
 
 	PreparePipelines();
@@ -72,6 +73,12 @@ void CG::EngineImpl::Prepare()
 
 void CG::EngineImpl::Cleanup()
 {
+	if (modelLoadingTread)
+	{
+		modelLoadingTread->join();
+	}
+
+	modelLoadingTread = nullptr;
 	testModel = nullptr;
 	imGui = nullptr;
 
@@ -155,6 +162,8 @@ void CG::EngineImpl::PreparePipelines()
 
 void CG::EngineImpl::BuildCommandBuffers()
 {
+	std::lock_guard<std::mutex> lock(modelLoadingMutex);
+
 	VkCommandBufferBeginInfo cmdBufInfo = {};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	cmdBufInfo.pNext = nullptr;
@@ -201,7 +210,10 @@ void CG::EngineImpl::BuildCommandBuffers()
 		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solid);
 
-		testModel->Draw(drawCmdBuffers[i], pipelineLayout);
+		if (testModel && testModel->IsLoaded())
+		{
+			testModel->Draw(drawCmdBuffers[i], pipelineLayout);
+		}
 
 		imGui->DrawFrame(drawCmdBuffers[i]);
 
@@ -213,16 +225,20 @@ void CG::EngineImpl::BuildCommandBuffers()
 
 void CG::EngineImpl::SetupDescriptors()
 {
+	// TODO: remove this constant, create separate descriptors for model;
+	constexpr uint32_t kMaxImagesCount = 50;
+
 	const std::vector<VkDescriptorPoolSize> poolSizes = 
 	{
 		Vk::Initializers::DescriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1),
 		// One combined image sampler per model image/texture
-		Vk::Initializers::DescriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
-			static_cast<uint32_t>(testModel->GetImages().size())),
+        Vk::Initializers::DescriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxImagesCount),
+		/*Vk::Initializers::DescriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+			static_cast<uint32_t>(testModel->GetImages().size())),*/
 	};
 
 	// One set for matrices and one per model image/texture
-	const uint32_t maxSetCount = static_cast<uint32_t>(testModel->GetImages().size()) + 1;
+	const uint32_t maxSetCount = kMaxImagesCount + 1;
 
 	VkDescriptorPoolCreateInfo descriptorPoolInfo = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, maxSetCount);
 	VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolInfo, nullptr, &descriptorPool));
@@ -257,30 +273,33 @@ void CG::EngineImpl::SetupDescriptors()
 	VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &matricesAllocInfo, &descriptorSet));
 	VkWriteDescriptorSet matricesWriteDescriptorSet = Vk::Initializers::WriteDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &ubo.descriptor);
 	vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &matricesWriteDescriptorSet, 0, nullptr);
+}
 
-	// TODO: optimize storage in images
-	std::vector<Vk::GLTFModel::Image>& images = testModel->GetImages();
-	const std::vector<Vk::GLTFModel::Texture>& textures = testModel->GetTextures();
+void CG::EngineImpl::BindModelMaterials()
+{
+    // TODO: optimize storage in images
+    std::vector<Vk::GLTFModel::Image>& images = testModel->GetImages();
+    const std::vector<Vk::GLTFModel::Texture>& textures = testModel->GetTextures();
 
-	for (auto& material : testModel->GetMaterials())
-	{
+    for (auto& material : testModel->GetMaterials())
+    {
         auto& baseColorImage = images[textures[material.baseColorTextureIndex].imageIndex];
         auto& normalMapImage = images[textures[material.normalMapTextureIndex].imageIndex];
-		auto& metallicRoughnessImage = images[textures[material.metallicRoughnessTextureIndex].imageIndex];
+        auto& metallicRoughnessImage = images[textures[material.metallicRoughnessTextureIndex].imageIndex];
 
-		const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
-		
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &material.descriptorSet));
+        const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
 
-		std::vector<VkWriteDescriptorSet> texturesWriteDescriptorSets =
-		{
-			Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &baseColorImage.texture->descriptor),
-			Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &normalMapImage.texture->descriptor),
-			Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &metallicRoughnessImage.texture->descriptor),
-		};
+        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &material.descriptorSet));
 
-		vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(texturesWriteDescriptorSets.size()), texturesWriteDescriptorSets.data(), 0, nullptr);
-	}
+        std::vector<VkWriteDescriptorSet> texturesWriteDescriptorSets =
+        {
+            Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &baseColorImage.texture->descriptor),
+            Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &normalMapImage.texture->descriptor),
+            Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &metallicRoughnessImage.texture->descriptor),
+        };
+
+        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(texturesWriteDescriptorSets.size()), texturesWriteDescriptorSets.data(), 0, nullptr);
+    }
 }
 
 void CG::EngineImpl::PrepareUniformBuffers()
@@ -357,11 +376,35 @@ void CG::EngineImpl::BuildUiCommandBuffers()
 	imGui->UpdateBuffers();
 }
 
-void CG::EngineImpl::LoadModel()
+void CG::EngineImpl::LoadModel(const std::string& modelFilePath)
 {
-	testModel = std::make_unique<Vk::GLTFModel>();
+	testModel = std::make_unique<Vk::GLTFModel>(&modelLoadingMutex);
 	testModel->vkDevice = vkDevice;
 	testModel->queue = queue;
 
-	testModel->LoadFromFile(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
+	testModel->LoadFromFile(modelFilePath);
+}
+
+void CG::EngineImpl::LoadModelAsync(std::string modelFilePath)
+{
+	modelLoadingTread = std::make_unique<std::thread>( 
+	[this, &modelFilePath]()
+        {
+			try
+			{
+				LoadModel(modelFilePath);
+
+                {
+                    std::lock_guard<std::mutex> lock(modelLoadingMutex);
+                    BindModelMaterials();
+                    testModel->SetLoaded(true);
+                }
+			}
+			catch (const Vk::GLTFModel::AssetLoadingException& e)
+			{
+				// TODO: show some GUI error via SDL2, force to use main thread
+				std::cout << e.what() << std::endl;
+			}
+        }
+	);
 }

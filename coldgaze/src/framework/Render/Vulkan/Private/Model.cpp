@@ -13,9 +13,16 @@
 #include "tinygltf/tiny_gltf.h"
 #include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Debug.hpp"
+#include <mutex>
+
+CG::Vk::GLTFModel::GLTFModel(std::mutex* aAssetLoadingMutex)
+	: assetLoadingMutex(aAssetLoadingMutex)
+{ }
 
 CG::Vk::GLTFModel::~GLTFModel()
 {
+	loaded = false;
+
 	vertices.Destroy();
 	indices.buffer.Destroy();
 	indices.count = 0;
@@ -33,7 +40,12 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename)
 	std::vector<Vertex> vertexBuffer;
 
 	if (fileLoaded) {
-		LoadImages(glTFInput);
+
+		{
+			std::lock_guard<std::mutex> lock(*assetLoadingMutex);
+			LoadImages(glTFInput);
+		}
+
 		LoadMaterials(glTFInput);
 		LoadTextures(glTFInput);
 		const tinygltf::Scene& scene = glTFInput.scenes[0];
@@ -43,9 +55,11 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename)
 		}
 	}
 	else {
-		throw std::runtime_error("Could not open the glTF file. Check, if it is correct");
+		throw AssetLoadingException("Could not open the glTF file. Check, if it is correct");
 		return;
 	}
+
+    std::lock_guard<std::mutex> lock(*assetLoadingMutex);
 
 	size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 	size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
@@ -170,6 +184,16 @@ void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout
 	{
 		DrawNode(commandBuffer, pipelineLayout, child);
 	}
+}
+
+bool CG::Vk::GLTFModel::IsLoaded() const
+{
+	return loaded;
+}
+
+void CG::Vk::GLTFModel::SetLoaded(bool aLoaded)
+{
+	loaded = aLoaded;
 }
 
 void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)

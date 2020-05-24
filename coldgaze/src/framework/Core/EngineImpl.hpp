@@ -4,6 +4,8 @@
 #include "vulkan/vulkan_core.h"
 #include "Render/Vulkan/Model.hpp"
 #include "Render/Vulkan/Buffer.hpp"
+#include <mutex>
+#include <thread>
 
 struct CameraComponent;
 
@@ -37,7 +39,7 @@ namespace CG
 		struct UISettings {
 			std::array<float, 50> frameTimes{};
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
-			glm::vec4 bgColor = { 0.0f, 0.0f, 0.2f, 1.0f };
+			glm::vec4 bgColor = { 0.569f, 0.553f, 0.479f, 1.0f };
 			bool isActive = true;
 			bool drawWire = false;
 		} uiData = {};
@@ -46,7 +48,7 @@ namespace CG
 		{
 			glm::mat4 projection;
 			glm::mat4 view;
-			glm::vec4 lightPos = glm::vec4(5.0f, 5.0f, -5.0f, 1.0f);
+			glm::vec4 lightPos = glm::vec4(2.0f, 2.0f, -2.0f, 1.0f);
 		} uboData = {};
 
 		Vk::Buffer ubo;
@@ -72,13 +74,15 @@ namespace CG
 		void BuildCommandBuffers() override;
 
 		void SetupDescriptors();
+		void BindModelMaterials();
 
 		void PrepareUniformBuffers();
 		void UpdateUniformBuffers();
 
 		void SetupSystems();
 
-		void LoadModel();
+		void LoadModel(const std::string& modelFilePath);
+		void LoadModelAsync(std::string modelFilePath);
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
@@ -88,5 +92,7 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		std::unique_ptr<Vk::GLTFModel> testModel;
+		std::mutex modelLoadingMutex;
+		std::unique_ptr<std::thread> modelLoadingTread;
     };
 }
