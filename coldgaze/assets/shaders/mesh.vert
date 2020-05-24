@@ -21,6 +21,7 @@ layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec3 outViewVec;
 layout (location = 4) out vec3 outLightVec;
+layout (location = 5) out vec3 outWorldPos;
 
 void main() 
 {
@@ -34,4 +35,5 @@ void main()
 	vec3 lPos = mat3(uboScene.view) * uboScene.lightPos.xyz;
 	outLightVec = pos.xyz - lPos;
 	outViewVec = -pos.xyz;		
+    outWorldPos = inPos;
 }
