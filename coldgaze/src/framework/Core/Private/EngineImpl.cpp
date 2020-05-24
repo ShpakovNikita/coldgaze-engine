@@ -385,10 +385,10 @@ void CG::EngineImpl::LoadModel(const std::string& modelFilePath)
 	testModel->LoadFromFile(modelFilePath);
 }
 
-void CG::EngineImpl::LoadModelAsync(std::string modelFilePath)
+void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
 {
 	modelLoadingTread = std::make_unique<std::thread>( 
-	[this, &modelFilePath]()
+	[this, modelFilePath]()
         {
 			try
 			{

@@ -82,7 +82,7 @@ namespace CG
 		void SetupSystems();
 
 		void LoadModel(const std::string& modelFilePath);
-		void LoadModelAsync(std::string modelFilePath);
+		void LoadModelAsync(const std::string& modelFilePath);
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
