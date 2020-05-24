@@ -45,9 +45,12 @@ if (WIN32)
             $<TARGET_FILE_DIR:${NAME}>)
 endif()
 
+add_custom_command(TARGET ${NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_SPIRV_DIR})
+
 file(GLOB_RECURSE SHADER_SRC RELATIVE ${SHADERS_GLSL_DIR} "${SHADERS_GLSL_DIR}/*.vert" "${SHADERS_GLSL_DIR}/*.frag")
 foreach(SHADER ${SHADER_SRC})
-    add_custom_command(TARGET ${NAME} PRE_BUILD
+    add_custom_command(TARGET ${NAME} POST_BUILD
         COMMAND ${GLSLC_TOOL} ${SHADERS_GLSL_DIR}/${SHADER} -o ${SHADERS_SPIRV_DIR}/${SHADER}.spv)
 endforeach()
 

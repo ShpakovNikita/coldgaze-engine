@@ -237,6 +237,8 @@ void CG::EngineImpl::SetupDescriptors()
 	const std::vector<VkDescriptorSetLayoutBinding> texturesSetLayoutBindings =
 	{
 		Vk::Initializers::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),
+		Vk::Initializers::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1),
+		Vk::Initializers::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 2),
 	};
 	VkDescriptorSetLayoutCreateInfo texturesDescriptorSetLayoutCreateInfo = Vk::Initializers::DescriptorSetLayoutCreateInfo(texturesSetLayoutBindings);
 	VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &texturesDescriptorSetLayoutCreateInfo, nullptr, &descriptorSetLayouts.textures));
@@ -256,12 +258,28 @@ void CG::EngineImpl::SetupDescriptors()
 	VkWriteDescriptorSet matricesWriteDescriptorSet = Vk::Initializers::WriteDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, &ubo.descriptor);
 	vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &matricesWriteDescriptorSet, 0, nullptr);
 
-	for (auto& image : testModel->GetImages())
+	// TODO: optimize storage in images
+	std::vector<Vk::GLTFModel::Image>& images = testModel->GetImages();
+	const std::vector<Vk::GLTFModel::Texture>& textures = testModel->GetTextures();
+
+	for (auto& material : testModel->GetMaterials())
 	{
+        auto& baseColorImage = images[textures[material.baseColorTextureIndex].imageIndex];
+        auto& normalMapImage = images[textures[material.normalMapTextureIndex].imageIndex];
+		auto& metallicRoughnessImage = images[textures[material.metallicRoughnessTextureIndex].imageIndex];
+
 		const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &image.descriptorSet));
-		VkWriteDescriptorSet texturesWriteDescriptorSet = Vk::Initializers::WriteDescriptorSet(image.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &image.texture->descriptor);
-		vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &texturesWriteDescriptorSet, 0, nullptr);
+		
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &material.descriptorSet));
+
+		std::vector<VkWriteDescriptorSet> texturesWriteDescriptorSets =
+		{
+			Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &baseColorImage.texture->descriptor),
+			Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &normalMapImage.texture->descriptor),
+			Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &metallicRoughnessImage.texture->descriptor),
+		};
+
+		vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(texturesWriteDescriptorSets.size()), texturesWriteDescriptorSets.data(), 0, nullptr);
 	}
 }
 

@@ -109,8 +109,8 @@ else()
 endif()
 
 set(ASSETS_DIR ${CMAKE_SOURCE_DIR}/assets/)
-set(SHADERS_GLSL_DIR ${CMAKE_SOURCE_DIR}/assets/shaders/)
-set(SHADERS_SPIRV_DIR ${SHADERS_GLSL_DIR}/compiled/)
+set(SHADERS_GLSL_DIR ${CMAKE_SOURCE_DIR}/assets/shaders)
+set(SHADERS_SPIRV_DIR ${SHADERS_GLSL_DIR}/compiled)
 
 if(RESOURCE_INSTALL_DIR)
 	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${RESOURCE_INSTALL_DIR}/\")

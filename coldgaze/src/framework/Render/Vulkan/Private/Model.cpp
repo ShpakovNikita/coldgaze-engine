@@ -109,14 +109,14 @@ std::vector<CG::Vk::GLTFModel::Image>& CG::Vk::GLTFModel::GetImages()
 	return images;
 }
 
+std::vector<CG::Vk::GLTFModel::Material>& CG::Vk::GLTFModel::GetMaterials()
+{
+    return materials;
+}
+
 const std::vector<CG::Vk::GLTFModel::Texture>& CG::Vk::GLTFModel::GetTextures() const
 {
 	return textures;
-}
-
-const std::vector<CG::Vk::GLTFModel::Material>& CG::Vk::GLTFModel::GetMaterials() const
-{
-	return materials;
 }
 
 const std::vector<CG::Vk::GLTFModel::Node>& CG::Vk::GLTFModel::GetNodes() const
@@ -153,11 +153,14 @@ void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout
 		{
 			if (primitive.indexCount > 0) 
 			{
+				Material& material = materials[primitive.materialIndex];
+
 				// Get the texture index for this primitive
-				Texture texture = textures[materials[primitive.materialIndex].baseColorTextureIndex];
+				Texture colorTexture = textures[material.baseColorTextureIndex];
+				Texture normalTexture = textures[material.normalMapTextureIndex];
 
 				// Bind the descriptor for the current primitive's texture
-				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &images[texture.imageIndex].descriptorSet, 0, nullptr);
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &material.descriptorSet, 0, nullptr);
 				vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 			}
 		}
@@ -190,7 +193,14 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
 
 		if (glTFMaterial.values.find("baseColorTexture") != glTFMaterial.values.end()) {
 			materials[i].baseColorTextureIndex = glTFMaterial.values["baseColorTexture"].TextureIndex();
-		}
+        }
+
+        if (glTFMaterial.values.find("metallicRoughnessTexture") != glTFMaterial.values.end()) {
+            materials[i].metallicRoughnessTextureIndex = glTFMaterial.values["metallicRoughnessTexture"].TextureIndex();
+        }
+
+        assert(glTFMaterial.normalTexture.index != -1);
+        materials[i].normalMapTextureIndex = glTFMaterial.normalTexture.index;
 	}
 }
 

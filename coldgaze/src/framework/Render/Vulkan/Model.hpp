@@ -117,12 +117,15 @@ namespace CG
 			struct Material {
 				glm::vec4 baseColorFactor = glm::vec4(1.0f);
 				uint32_t baseColorTextureIndex = 0;
+				uint32_t normalMapTextureIndex = 0;
+				uint32_t metallicRoughnessTextureIndex = 0;
+
+                // We also store (and create) a descriptor set that's used to access this texture from the fragment shader
+                VkDescriptorSet descriptorSet = {};
 			};
 
 			struct Image {
 			    std::unique_ptr<Texture2D> texture;
-				// We also store (and create) a descriptor set that's used to access this texture from the fragment shader
-				VkDescriptorSet descriptorSet = {};
 			};
 
 			struct Texture {
@@ -134,8 +137,8 @@ namespace CG
 			void LoadFromFile(const std::string& filename);
 
 			std::vector<Image>& GetImages();
+			std::vector<Material>& GetMaterials();
 			const std::vector<Texture>& GetTextures() const;
-			const std::vector<Material>& GetMaterials() const;
 			const std::vector<Node>& GetNodes() const;
 
 			void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
