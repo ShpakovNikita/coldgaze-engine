@@ -22,6 +22,7 @@ layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec3 outViewVec;
 layout (location = 4) out vec3 outLightVec;
 layout (location = 5) out vec3 outWorldPos;
+layout (location = 6) out vec3 outLightPos;
 
 void main() 
 {
@@ -36,4 +37,5 @@ void main()
 	outLightVec = pos.xyz - lPos;
 	outViewVec = -pos.xyz;		
     outWorldPos = inPos;
+    outLightPos = uboScene.lightPos.xyz;
 }

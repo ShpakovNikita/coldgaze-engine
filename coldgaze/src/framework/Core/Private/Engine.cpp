@@ -51,6 +51,8 @@ void CG::Engine::RenderFrame([[ maybe_unused ]] float deltaTime)
 
 void CG::Engine::Run()
 {
+	const float minSecPerFrame = 1.0f / engineConfig.fpsLimit;
+
     isRunning = Init();
 
 	if (isRunning)
@@ -59,6 +61,7 @@ void CG::Engine::Run()
 	}
 
 	auto previousTime = std::chrono::steady_clock::now();
+	std::this_thread::sleep_for(std::chrono::microseconds(static_cast<size_t>(minSecPerFrame * 1000.0f)));
 
     while (isRunning)
 	{
@@ -68,7 +71,6 @@ void CG::Engine::Run()
 
         MainLoop(deltaTime);
 
-		float minSecPerFrame = 1.0f / engineConfig.fpsLimit;
 		std::chrono::milliseconds timeToSleep(std::max(0, static_cast<int>((minSecPerFrame - deltaTime) * 1000.0f)));
 		std::this_thread::sleep_for(timeToSleep);
 

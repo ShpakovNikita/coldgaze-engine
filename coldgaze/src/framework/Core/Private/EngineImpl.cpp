@@ -268,7 +268,6 @@ void CG::EngineImpl::SetupDescriptors()
         auto& normalMapImage = images[textures[material.normalMapTextureIndex].imageIndex];
 		auto& metallicRoughnessImage = images[textures[material.metallicRoughnessTextureIndex].imageIndex];
 
-
 		const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
 		
 		VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &material.descriptorSet));
