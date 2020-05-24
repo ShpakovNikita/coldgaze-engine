@@ -4,7 +4,7 @@
 
 #include "SDL2/SDL.h"
 #include "Core/EngineConfig.hpp"
-#include "Core/TriangleEngine.hpp"
+#include "Core/EngineImpl.hpp"
 
 int main(int argc, char* argv[]) {
 
@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
     CG::EngineConfig engine_config = { 1280, 720 };
 	for (size_t i = 0; i < argc; i++) { engine_config.args.push_back(argv[i]); };
 
-	CG::TriangleEngine engine = { engine_config };
+	CG::EngineImpl engine = { engine_config };
 
 	int exec_result;
 	try

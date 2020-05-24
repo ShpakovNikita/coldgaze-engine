@@ -5,11 +5,14 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STBI_MSC_SECURE_CRT
 
-#include "tinygltf/tiny_gltf.h"
+#pragma warning(push, 0)        
 #include <glm/gtc/type_ptr.hpp>
+#include "glm/ext/matrix_transform.hpp"
+#pragma warning(pop)
+
+#include "tinygltf/tiny_gltf.h"
 #include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Debug.hpp"
-#include "glm/ext/matrix_transform.hpp"
 
 CG::Vk::GLTFModel::~GLTFModel()
 {

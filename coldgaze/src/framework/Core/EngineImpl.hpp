@@ -20,11 +20,11 @@ namespace CG
 
 namespace CG
 {
-    class TriangleEngine : public Engine
+    class EngineImpl : public Engine
     {
     public:
-        TriangleEngine(CG::EngineConfig& engineConfig);
-		virtual ~TriangleEngine();
+        EngineImpl(CG::EngineConfig& engineConfig);
+		virtual ~EngineImpl();
 
     protected:
         void RenderFrame(float deltaTime) override;

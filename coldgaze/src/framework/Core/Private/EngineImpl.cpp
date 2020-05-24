@@ -1,4 +1,4 @@
-#include "Core\TriangleEngine.hpp"
+#include "Core\EngineImpl.hpp"
 #include "Render\Vulkan\Debug.hpp"
 #include "Render\Vulkan\Device.hpp"
 #include "Core\EngineConfig.hpp"
@@ -22,13 +22,13 @@ using namespace CG;
 
 constexpr float DEFAULT_FOV = 60.0f;
 
-CG::TriangleEngine::TriangleEngine(CG::EngineConfig& engineConfig)
+CG::EngineImpl::EngineImpl(CG::EngineConfig& engineConfig)
     : CG::Engine(engineConfig)
 { }
 
-CG::TriangleEngine::~TriangleEngine() = default;
+CG::EngineImpl::~EngineImpl() = default;
 
-void CG::TriangleEngine::RenderFrame(float deltaTime)
+void CG::EngineImpl::RenderFrame(float deltaTime)
 {
 	UpdateUniformBuffers();
 
@@ -56,7 +56,7 @@ void CG::TriangleEngine::RenderFrame(float deltaTime)
 	SubmitFrame();
 }
 
-void CG::TriangleEngine::Prepare()
+void CG::EngineImpl::Prepare()
 {
     Engine::Prepare();
 	LoadModel();
@@ -70,7 +70,7 @@ void CG::TriangleEngine::Prepare()
 	BuildCommandBuffers();
 }
 
-void CG::TriangleEngine::Cleanup()
+void CG::EngineImpl::Cleanup()
 {
 	testModel = nullptr;
 	imGui = nullptr;
@@ -78,7 +78,7 @@ void CG::TriangleEngine::Cleanup()
 	Engine::Cleanup();
 }
 
-VkPhysicalDeviceFeatures CG::TriangleEngine::GetEnabledDeviceFeatures() const
+VkPhysicalDeviceFeatures CG::EngineImpl::GetEnabledDeviceFeatures() const
 {
 	VkPhysicalDeviceFeatures availableFeatures = vkDevice->features;
 	VkPhysicalDeviceFeatures enabledFeatures = {};
@@ -91,14 +91,14 @@ VkPhysicalDeviceFeatures CG::TriangleEngine::GetEnabledDeviceFeatures() const
 	return enabledFeatures;
 }
 
-void CG::TriangleEngine::FlushCommandBuffer(VkCommandBuffer commandBuffer)
+void CG::EngineImpl::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 {
 	assert(commandBuffer != VK_NULL_HANDLE); 
 
 	vkDevice->FlushCommandBuffer(commandBuffer, queue, true);
 }
 
-void CG::TriangleEngine::PreparePipelines()
+void CG::EngineImpl::PreparePipelines()
 {
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = Vk::Initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
 	VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo = Vk::Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
@@ -153,7 +153,7 @@ void CG::TriangleEngine::PreparePipelines()
 	}
 }
 
-void CG::TriangleEngine::BuildCommandBuffers()
+void CG::EngineImpl::BuildCommandBuffers()
 {
 	VkCommandBufferBeginInfo cmdBufInfo = {};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -211,7 +211,7 @@ void CG::TriangleEngine::BuildCommandBuffers()
 	}
 }
 
-void CG::TriangleEngine::SetupDescriptors()
+void CG::EngineImpl::SetupDescriptors()
 {
 	const std::vector<VkDescriptorPoolSize> poolSizes = 
 	{
@@ -265,7 +265,7 @@ void CG::TriangleEngine::SetupDescriptors()
 	}
 }
 
-void CG::TriangleEngine::PrepareUniformBuffers()
+void CG::EngineImpl::PrepareUniformBuffers()
 {
 	auto cameraEntity = registry.create();
 	CameraComponent& component = registry.assign<CameraComponent>(cameraEntity);
@@ -291,14 +291,14 @@ void CG::TriangleEngine::PrepareUniformBuffers()
 	UpdateUniformBuffers();
 }
 
-void CG::TriangleEngine::UpdateUniformBuffers()
+void CG::EngineImpl::UpdateUniformBuffers()
 {
 	uboData.projection = cameraComponent->uboVS.projectionMatrix;
 	uboData.view = cameraComponent->uboVS.viewMatrix;
 	ubo.CopyTo(&uboData, sizeof(uboData));
 }
 
-void CG::TriangleEngine::SetupSystems()
+void CG::EngineImpl::SetupSystems()
 {
 	auto cameraSystem = std::make_unique<CameraSystem>();
 	cameraSystem->SetDevice(vkDevice);
@@ -308,7 +308,7 @@ void CG::TriangleEngine::SetupSystems()
 	systems.push_back(std::move(lightSystem));
 }
 
-void CG::TriangleEngine::DrawUI()
+void CG::EngineImpl::DrawUI()
 {
 	ImGui::NewFrame();
 
@@ -333,13 +333,13 @@ void CG::TriangleEngine::DrawUI()
 	ImGui::Render();
 }
 
-void CG::TriangleEngine::BuildUiCommandBuffers()
+void CG::EngineImpl::BuildUiCommandBuffers()
 {
 	DrawUI();
 	imGui->UpdateBuffers();
 }
 
-void CG::TriangleEngine::LoadModel()
+void CG::EngineImpl::LoadModel()
 {
 	testModel = std::make_unique<Vk::GLTFModel>();
 	testModel->vkDevice = vkDevice;

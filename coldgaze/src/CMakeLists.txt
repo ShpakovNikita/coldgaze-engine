@@ -33,6 +33,26 @@ endif(WIN32)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
+# ugly hack, usually we have to build library and application separate, so this code should be inside engine CMakeLists.txt
+
+# BEGIN ENGINE CODE
+
+if (WIN32)
+    file(GLOB_RECURSE DLLS "${COLDGAZE_LIBS_PATH}/*.dll")
+    add_custom_command(TARGET ${NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            ${DLLS}
+            $<TARGET_FILE_DIR:${NAME}>)
+endif()
+
+file(GLOB_RECURSE SHADER_SRC RELATIVE ${SHADERS_GLSL_DIR} "${SHADERS_GLSL_DIR}/*.vert" "${SHADERS_GLSL_DIR}/*.frag")
+foreach(SHADER ${SHADER_SRC})
+    add_custom_command(TARGET ${NAME} PRE_BUILD
+        COMMAND ${GLSLC_TOOL} ${SHADERS_GLSL_DIR}/${SHADER} -o ${SHADERS_SPIRV_DIR}/${SHADER}.spv)
+endforeach()
+
+# END ENGINE CODE
+
 if(RESOURCE_INSTALL_DIR)
     install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()

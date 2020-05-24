@@ -3,11 +3,19 @@ cmake_policy(VERSION 2.8)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 set(CMAKE_BINARY_DIR "${CMAKE_SOURCE_DIR}/bin")
 set(COLDGAZE_SOURCE_PATH ${COLDGAZE_SOURCE_PATH} "${CMAKE_SOURCE_DIR}/src")
+set(COLDGAZE_LIBS_PATH "${CMAKE_SOURCE_DIR}/libs")
+set(REPO_ROOT_PATH ${CMAKE_SOURCE_DIR}/..)
 
 if(WIN32)
     set(COLDGAZE_LIBS_PATH ${CMAKE_SOURCE_DIR}/libs/win32)
+    set(TOOLS_PATH ${REPO_ROOT_PATH}/tools/win32)
 else(WIN32)
     message("Non win32 systems not supported from the box, some errors may be occured!")
+endif()
+
+# Setting up tools
+if(WIN32)
+    set(GLSLC_TOOL ${TOOLS_PATH}/glslc.exe)
 endif()
 
 set(NAME Coldgaze)
@@ -100,12 +108,15 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror")
 endif()
 
+set(ASSETS_DIR ${CMAKE_SOURCE_DIR}/assets/)
+set(SHADERS_GLSL_DIR ${CMAKE_SOURCE_DIR}/assets/shaders/)
+set(SHADERS_SPIRV_DIR ${SHADERS_GLSL_DIR}/compiled/)
 
 if(RESOURCE_INSTALL_DIR)
 	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${RESOURCE_INSTALL_DIR}/\")
 	install(DIRECTORY assets/ DESTINATION ${RESOURCE_INSTALL_DIR}/)
 else()
-	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${CMAKE_SOURCE_DIR}/assets/\")
+	add_definitions(-DVK_EXAMPLE_ASSETS_DIR=\"${ASSETS_DIR}\")
 endif()
 
 # Compiler specific stuff
