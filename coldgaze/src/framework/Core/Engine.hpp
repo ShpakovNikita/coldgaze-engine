@@ -47,6 +47,7 @@ namespace CG
 
 		const InputHandler* GetInputHandler() const;
 		const Window* GetCurrentWindow() const;
+		const uint32_t GetSampleCount() const;
 
 		// TODO: move to some renderer interface
 		VkPipelineShaderStageCreateInfo LoadShader(const std::string& filename, VkShaderStageFlagBits stage);
@@ -90,6 +91,8 @@ namespace CG
         std::vector<VkFramebuffer> frameBuffers;
         VkSubmitInfo submitInfo = {};
 
+		VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
+
         struct {
             // Swap chain image presentation
             VkSemaphore presentComplete;
@@ -125,6 +128,19 @@ namespace CG
 		CameraComponent* cameraComponent = nullptr;
 
     private:
+        struct {
+            struct {
+                VkImage image;
+                VkImageView view;
+                VkDeviceMemory memory;
+            } color;
+            struct {
+                VkImage image;
+                VkImageView view;
+                VkDeviceMemory memory;
+            } depth;
+        } multisampleTarget;
+
         bool Init();
         void MainLoop(float deltaTime);
 
@@ -156,6 +172,7 @@ namespace CG
 		// Cleanup steps
         void CleanupSDL();
 		void DestroyCommandBuffers();
+		void SetupMultisampleTarget();
 
 		bool CheckValidationLayersSupport();
 

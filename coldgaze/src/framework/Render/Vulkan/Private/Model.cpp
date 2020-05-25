@@ -15,8 +15,22 @@
 #include "Render/Vulkan/Debug.hpp"
 #include <mutex>
 
-CG::Vk::GLTFModel::GLTFModel(std::mutex* aAssetLoadingMutex)
-	: assetLoadingMutex(aAssetLoadingMutex)
+namespace SGLTFModel
+{
+	using UString = std::basic_string<uint8_t>;
+
+	UString FloatToUnsignedColor(const glm::vec4 color)
+	{
+		return { 
+			static_cast<uint8_t>(color.r * 255.0f),
+			static_cast<uint8_t>(color.g * 255.0f),
+			static_cast<uint8_t>(color.b * 255.0f),
+			static_cast<uint8_t>(color.a * 255.0f),
+		};
+	}
+}
+
+CG::Vk::GLTFModel::GLTFModel()
 { }
 
 CG::Vk::GLTFModel::~GLTFModel()
@@ -42,12 +56,13 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename)
 	if (fileLoaded) {
 
 		{
-			std::lock_guard<std::mutex> lock(*assetLoadingMutex);
 			LoadImages(glTFInput);
 		}
+		LoadTextures(glTFInput);
+		CreateSupportingTextures();
 
 		LoadMaterials(glTFInput);
-		LoadTextures(glTFInput);
+
 		const tinygltf::Scene& scene = glTFInput.scenes[0];
 		for (size_t i = 0; i < scene.nodes.size(); i++) {
 			const tinygltf::Node node = glTFInput.nodes[scene.nodes[i]];
@@ -58,8 +73,6 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename)
 		throw AssetLoadingException("Could not open the glTF file. Check, if it is correct");
 		return;
 	}
-
-    std::lock_guard<std::mutex> lock(*assetLoadingMutex);
 
 	size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
 	size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
@@ -223,8 +236,14 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
             materials[i].metallicRoughnessTextureIndex = glTFMaterial.values["metallicRoughnessTexture"].TextureIndex();
         }
 
-        assert(glTFMaterial.normalTexture.index != -1);
-        materials[i].normalMapTextureIndex = glTFMaterial.normalTexture.index;
+		if (glTFMaterial.normalTexture.index == -1)
+		{
+			materials[i].normalMapTextureIndex = defaultNormalMapIndex;
+		}
+		else
+		{
+			materials[i].normalMapTextureIndex = glTFMaterial.normalTexture.index;
+		}
 	}
 }
 
@@ -354,6 +373,11 @@ void CG::Vk::GLTFModel::LoadNode(
 			}
 			// Indices
 			{
+				if (glTFPrimitive.indices == -1)
+				{
+					throw AssetLoadingException("There is no support for primitives without indices");
+				}
+
 				const tinygltf::Accessor& accessor = input.accessors[glTFPrimitive.indices];
 				const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
 				const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
@@ -408,4 +432,26 @@ void CG::Vk::GLTFModel::LoadNode(
 	{
 		nodes.push_back(node);
 	}
+}
+
+int32_t CG::Vk::GLTFModel::CreateColorTexture(const glm::vec4& color)
+{
+	Image image;
+
+    image.texture = std::make_unique<Texture2D>();
+
+    auto imageData = SGLTFModel::FloatToUnsignedColor(color);
+    const unsigned char* buffer = imageData.c_str();
+
+	image.texture->FromBuffer(buffer, 1 * 4, VK_FORMAT_R8G8B8A8_UNORM, 1, 1, vkDevice, queue);
+
+    images.push_back(std::move(image));
+	return static_cast<int32_t>(images.size()) - 1;
+}
+
+void CG::Vk::GLTFModel::CreateSupportingTextures()
+{
+	defaultNormalMapIndex = CreateColorTexture({ 0.0f, 0.0f, 1.0f, 1.0f });
+	Texture normalTexture = { defaultNormalMapIndex };
+    textures.push_back(std::move(normalTexture));
 }

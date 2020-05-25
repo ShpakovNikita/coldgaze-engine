@@ -203,7 +203,7 @@ void CG::Vk::ImGuiImpl::InitResources(VkRenderPass renderPass, VkQueue copyQueue
 		Initializers::PipelineViewportStateCreateInfo(1, 1, 0);
 
 	VkPipelineMultisampleStateCreateInfo multisampleState =
-		Initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
+		Initializers::PipelineMultisampleStateCreateInfo(static_cast<VkSampleCountFlagBits>(engine.GetSampleCount()));
 
 	std::vector<VkDynamicState> dynamicStateEnables = {
 			VK_DYNAMIC_STATE_VIEWPORT,
@@ -344,9 +344,6 @@ void CG::Vk::ImGuiImpl::UpdateUI(float deltaTime)
 	// Update imGui
 	ImGuiIO& io = ImGui::GetIO();
 
-	const Window* currentWindow = engine.GetCurrentWindow();
-
-	io.DisplaySize = ImVec2(currentWindow->windowResolution.width, currentWindow->windowResolution.height);
 	io.DeltaTime = deltaTime;
 
 	const InputHandler* inputHandler = engine.GetInputHandler();

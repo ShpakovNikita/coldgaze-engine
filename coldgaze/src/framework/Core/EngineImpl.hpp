@@ -37,18 +37,28 @@ namespace CG
 
     private:
 		struct UISettings {
+			enum class ePipeline
+			{
+				kSolidSampleShading = 1,
+				kWire = 2,
+			};
+
 			std::array<float, 50> frameTimes{};
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
 			glm::vec4 bgColor = { 0.569f, 0.553f, 0.479f, 1.0f };
 			bool isActive = true;
 			bool drawWire = false;
+			bool useSampleShading = false;
+
+			ePipeline enabledPipeline = ePipeline::kSolidSampleShading;
+
 		} uiData = {};
 
 		struct ShaderUniformData
 		{
 			glm::mat4 projection;
 			glm::mat4 view;
-			glm::vec4 lightPos = glm::vec4(2.0f, 2.0f, -2.0f, 1.0f);
+			glm::vec4 lightPos = glm::vec4(1.5f, 1.5f, -1.5f, 1.0f);
 		} uboData = {};
 
 		Vk::Buffer ubo;
@@ -60,8 +70,8 @@ namespace CG
 
 		struct RenderPipelines
 		{
-			VkPipeline solid;
 			VkPipeline wireframe;
+			VkPipeline solidMSAA;
 		} pipelines = {};
 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
@@ -75,6 +85,7 @@ namespace CG
 
 		void SetupDescriptors();
 		void BindModelMaterials();
+		void UnbindModelMaterials();
 
 		void PrepareUniformBuffers();
 		void UpdateUniformBuffers();
@@ -92,7 +103,9 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		std::unique_ptr<Vk::GLTFModel> testModel;
+		/*
 		std::mutex modelLoadingMutex;
 		std::unique_ptr<std::thread> modelLoadingTread;
+		*/
     };
 }

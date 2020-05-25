@@ -140,7 +140,7 @@ namespace CG
 				int32_t imageIndex;
 			};
 
-			GLTFModel(std::mutex* assetLoadingMutex);
+			GLTFModel();
 			~GLTFModel();
 
 			void LoadFromFile(const std::string& filename);
@@ -164,6 +164,12 @@ namespace CG
 			void LoadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, Node* parent,
 				std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer);
 
+			// This is needed for mising textures cases. It is better to have different shaders per node
+			int32_t CreateColorTexture(const glm::vec4& color);
+			void CreateSupportingTextures();
+
+			int32_t defaultNormalMapIndex = -1;
+
 			/*
 				Model data
 			*/
@@ -174,8 +180,6 @@ namespace CG
 
 			// for async loading, TODO: move mutex here
 			bool loaded = false;
-
-			std::mutex* assetLoadingMutex = nullptr;
 		};
 	}
 }

@@ -17,6 +17,8 @@
 #include "Render\Vulkan\Model.hpp"
 #include "Render\Vulkan\Initializers.hpp"
 #include "Render\Vulkan\Texture2D.hpp"
+#include <include/nfd.h>
+#include "SDL2\SDL_messagebox.h"
 
 using namespace CG;
 
@@ -64,8 +66,9 @@ void CG::EngineImpl::Prepare()
 	SetupSystems();
 
 	PrepareUniformBuffers();
-	LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 	SetupDescriptors();
+
+	LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
 	PreparePipelines();
 	BuildCommandBuffers();
@@ -73,12 +76,6 @@ void CG::EngineImpl::Prepare()
 
 void CG::EngineImpl::Cleanup()
 {
-	if (modelLoadingTread)
-	{
-		modelLoadingTread->join();
-	}
-
-	modelLoadingTread = nullptr;
 	testModel = nullptr;
 	imGui = nullptr;
 
@@ -94,6 +91,10 @@ VkPhysicalDeviceFeatures CG::EngineImpl::GetEnabledDeviceFeatures() const
 	{
 		enabledFeatures.fillModeNonSolid = VK_TRUE;
 	}
+
+    if (availableFeatures.sampleRateShading) {
+        enabledFeatures.sampleRateShading = VK_TRUE;
+    }
 
 	return enabledFeatures;
 }
@@ -150,7 +151,11 @@ void CG::EngineImpl::PreparePipelines()
 	pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
 	pipelineCreateInfo.pStages = shaderStages.data();
 
-	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solid));
+    multisampleStateCreateInfo.rasterizationSamples = sampleCount;
+    multisampleStateCreateInfo.sampleShadingEnable = VK_TRUE;
+    multisampleStateCreateInfo.minSampleShading = 0.25f;
+
+	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidMSAA));
 
 	// Wire frame rendering pipeline
 	if (vkDevice->enabledFeatures.fillModeNonSolid) {
@@ -162,8 +167,6 @@ void CG::EngineImpl::PreparePipelines()
 
 void CG::EngineImpl::BuildCommandBuffers()
 {
-	std::lock_guard<std::mutex> lock(modelLoadingMutex);
-
 	VkCommandBufferBeginInfo cmdBufInfo = {};
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	cmdBufInfo.pNext = nullptr;
@@ -180,7 +183,7 @@ void CG::EngineImpl::BuildCommandBuffers()
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = engineConfig.width;
 	renderPassBeginInfo.renderArea.extent.height = engineConfig.height;
-	renderPassBeginInfo.clearValueCount = 2;
+	renderPassBeginInfo.clearValueCount = 3;
 	renderPassBeginInfo.pClearValues = clearValues;
 
 	BuildUiCommandBuffers();
@@ -208,7 +211,7 @@ void CG::EngineImpl::BuildCommandBuffers()
 		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
 		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solid);
+		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solidMSAA);
 
 		if (testModel && testModel->IsLoaded())
 		{
@@ -226,7 +229,7 @@ void CG::EngineImpl::BuildCommandBuffers()
 void CG::EngineImpl::SetupDescriptors()
 {
 	// TODO: remove this constant, create separate descriptors for model;
-	constexpr uint32_t kMaxImagesCount = 50;
+	constexpr uint32_t kMaxImagesCount = 512;
 
 	const std::vector<VkDescriptorPoolSize> poolSizes = 
 	{
@@ -302,6 +305,11 @@ void CG::EngineImpl::BindModelMaterials()
     }
 }
 
+void CG::EngineImpl::UnbindModelMaterials()
+{
+
+}
+
 void CG::EngineImpl::PrepareUniformBuffers()
 {
 	auto cameraEntity = registry.create();
@@ -366,6 +374,54 @@ void CG::EngineImpl::DrawUI()
 		ImGui::End();
 	}
 
+	{
+        if (ImGui::BeginMainMenuBar())
+        {
+            if (ImGui::BeginMenu("File"))
+            {
+                ImGui::MenuItem("File menu", nullptr, false, false);
+				{
+                    bool isOpenFileEnabled = false;
+
+					/*
+					if (std::unique_lock<std::mutex> lock(modelLoadingMutex, std::try_to_lock); 
+						lock.owns_lock() && (!testModel || testModel->IsLoaded()))
+					{
+						isOpenFileEnabled = true;
+					}
+					*/
+
+					isOpenFileEnabled = true;
+
+					if (ImGui::MenuItem("Open", "Ctrl+O", false, isOpenFileEnabled))
+					{
+						nfdchar_t* outPath = nullptr;
+# pragma warning(push)
+# pragma warning(disable : 26812)
+						nfdresult_t result = NFD_OpenDialog(nullptr, nullptr, &outPath);
+# pragma warning(pop)
+						if (result == NFD_OKAY) {
+							LoadModelAsync(outPath);
+							free(outPath);
+						}
+						else if (result == NFD_ERROR)
+						{
+							std::cerr << NFD_GetError() << std::endl;
+						}
+					}
+					ImGui::EndMenu();
+				}
+            }
+            if (ImGui::BeginMenu("Overlay"))
+            {
+				if (ImGui::MenuItem("Show", nullptr, false, !uiData.isActive)) { uiData.isActive = true; }
+				if (ImGui::MenuItem("Hide", nullptr, false, uiData.isActive)) { uiData.isActive = false; }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+	}
+
 	// Render to generate draw buffers
 	ImGui::Render();
 }
@@ -373,38 +429,55 @@ void CG::EngineImpl::DrawUI()
 void CG::EngineImpl::BuildUiCommandBuffers()
 {
 	DrawUI();
+
 	imGui->UpdateBuffers();
 }
 
 void CG::EngineImpl::LoadModel(const std::string& modelFilePath)
 {
-	testModel = std::make_unique<Vk::GLTFModel>(&modelLoadingMutex);
-	testModel->vkDevice = vkDevice;
-	testModel->queue = queue;
+	{
+        if (testModel)
+        {
+            UnbindModelMaterials();
+        }
+
+        testModel = std::make_unique<Vk::GLTFModel>();
+
+        testModel->vkDevice = vkDevice;
+        testModel->queue = queue;
+	}
 
 	testModel->LoadFromFile(modelFilePath);
 }
 
 void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
 {
-	modelLoadingTread = std::make_unique<std::thread>( 
-	[this, modelFilePath]()
-        {
-			try
-			{
-				LoadModel(modelFilePath);
+    try
+    {
+        LoadModel(modelFilePath);
 
-                {
-                    std::lock_guard<std::mutex> lock(modelLoadingMutex);
-                    BindModelMaterials();
-                    testModel->SetLoaded(true);
-                }
-			}
-			catch (const Vk::GLTFModel::AssetLoadingException& e)
-			{
-				// TODO: show some GUI error via SDL2, force to use main thread
-				std::cout << e.what() << std::endl;
-			}
+        {
+            BindModelMaterials();
+            testModel->SetLoaded(true);
         }
-	);
+    }
+    catch (const Vk::GLTFModel::AssetLoadingException & e)
+    {
+		std::cerr << e.what() << std::endl;
+
+        const SDL_MessageBoxButtonData buttons[] = {
+			{ /* .flags, .buttonid, .text */        0, 0, "ok" },
+        };
+        const SDL_MessageBoxData messageboxdata = {
+            SDL_MESSAGEBOX_INFORMATION,
+            NULL,
+            "Asset loading error",
+			e.what(),
+            SDL_arraysize(buttons),
+            buttons,
+        };
+        if (SDL_ShowMessageBox(&messageboxdata, nullptr) < 0) {
+			throw std::runtime_error("Error while trying to display SDL message box:" + std::string(SDL_GetError()));
+        }
+    }
 }

@@ -27,6 +27,8 @@ include_directories("include/glm")
 include_directories("include/entt/src")
 include_directories("include/tinygltf")
 include_directories("include/imgui")
+include_directories("include/nativefiledialog/src")
+include_directories("include/nativefiledialog/src/include")
 
 # Use FindVulkan module added with CMAKE 3.7
 if(NOT CMAKE_VERSION VERSION_LESS 3.7.0)

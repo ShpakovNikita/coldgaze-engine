@@ -7,6 +7,10 @@ message(STATUS "Generating project file for ${PROJECT_FOLDER}")
 file(GLOB_RECURSE HEADERS *.hpp *.h)
 file(GLOB_RECURSE SOURCE ${HEADERS} "*.cpp")
 file(GLOB IMGUI_SOURCE "../include/imgui/*.cpp")
+file(GLOB NATIVEFILEDIALOG_SOURCE 
+    "../include/nativefiledialog/src/nfd_common.c"
+    "../include/nativefiledialog/src/nfd_win.cpp"
+)
 
 set(MAIN_CPP ${PROJECT_FOLDER}/main.cpp)
 
@@ -22,11 +26,11 @@ endif()
 if(WIN32)
     set(COLDGAZE_LIBRARIES "")
 
-    add_executable(${PROJECT_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${SHADERS} ${IMGUI_SOURCE})
+    add_executable(${PROJECT_NAME} WIN32 ${MAIN_CPP} ${SOURCE} ${SHADERS} ${IMGUI_SOURCE} ${NATIVEFILEDIALOG_SOURCE})
     source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
     target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARY} ${ASSIMP_LIBRARIES} ${WINLIBS} ${GLFW_LIBRARIES} ${COLDGAZE_LIBRARIES} ${SDL2_LIBRARY})
 else(WIN32)
-    add_executable(${PROJECT_NAME} ${MAIN_CPP} ${SOURCE} ${SHADERS} ${SDL2_LIBRARY} ${IMGUI_SOURCE})
+    add_executable(${PROJECT_NAME} ${MAIN_CPP} ${SOURCE} ${SHADERS} ${SDL2_LIBRARY} ${IMGUI_SOURCE} ${NATIVEFILEDIALOG_SOURCE})
     source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE})
     target_link_libraries(${PROJECT_NAME})
 endif(WIN32)

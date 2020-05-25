@@ -10,3 +10,6 @@
 [submodule "coldgaze/include/tinygltf"]
 	path = coldgaze/include/tinygltf
 	url = https://github.com/syoyo/tinygltf.git
+[submodule "coldgaze/include/nativefiledialog"]
+	path = coldgaze/include/nativefiledialog
+	url = https://github.com/mlabbe/nativefiledialog.git

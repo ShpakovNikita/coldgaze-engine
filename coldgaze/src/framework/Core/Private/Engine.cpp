@@ -100,6 +100,11 @@ const CG::Window* CG::Engine::GetCurrentWindow() const
 	return currentWindow.get();
 }
 
+const uint32_t CG::Engine::GetSampleCount() const
+{
+	return sampleCount;
+}
+
 bool CG::Engine::Init()
 {
     return SetupDependencies() && InitSDL() && InitWindow() && InitGraphicsAPI();
@@ -499,73 +504,100 @@ void CG::Engine::SetupDepthStencil()
 
 void CG::Engine::SetupRenderPass()
 {
-	std::array<VkAttachmentDescription, 2> attachments = {};
+	sampleCount = vkDevice->GetMaxUsableSampleCount();
 
-	attachments[0].format = vkSwapChain->colorFormat;
-	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-	attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    std::array<VkAttachmentDescription, 4> attachments = {};
 
-	attachments[1].format = vkDevice->depthFormat;
-	attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-	attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-	attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    // Multisampled attachment that we render to
+    attachments[0].format = vkSwapChain->colorFormat;
+    attachments[0].samples = sampleCount;
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	VkAttachmentReference colorReference = {};
-	colorReference.attachment = 0;
-	colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    // This is the frame buffer attachment to where the multisampled image
+    // will be resolved to and which will be presented to the swapchain
+    attachments[1].format = vkSwapChain->colorFormat;
+    attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[1].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-	VkAttachmentReference depthReference = {};
-	depthReference.attachment = 1;
-	depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    // Multisampled depth attachment we render to
+    attachments[2].format = vkDevice->depthFormat;
+    attachments[2].samples = sampleCount;
+    attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	VkSubpassDescription subpassDescription = {};
-	subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-	subpassDescription.colorAttachmentCount = 1;
-	subpassDescription.pColorAttachments = &colorReference;
-	subpassDescription.pDepthStencilAttachment = &depthReference;
-	subpassDescription.inputAttachmentCount = 0;
-	subpassDescription.pInputAttachments = nullptr;
-	subpassDescription.preserveAttachmentCount = 0;
-	subpassDescription.pPreserveAttachments = nullptr;
-	subpassDescription.pResolveAttachments = nullptr;
+    // Depth resolve attachment
+    attachments[3].format = vkDevice->depthFormat;
+    attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[3].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachments[3].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attachments[3].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	std::array<VkSubpassDependency, 2> dependencies;
 
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    VkAttachmentReference colorReference = {};
+    colorReference.attachment = 0;
+    colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    VkAttachmentReference depthReference = {};
+    depthReference.attachment = 2;
+    depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-	VkRenderPassCreateInfo renderPassInfo = {};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-	renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
-	renderPassInfo.pAttachments = attachments.data();
-	renderPassInfo.subpassCount = 1;
-	renderPassInfo.pSubpasses = &subpassDescription;
-	renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
-	renderPassInfo.pDependencies = dependencies.data();
+    // Resolve attachment reference for the color attachment
+    VkAttachmentReference resolveReference = {};
+    resolveReference.attachment = 1;
+    resolveReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-	VK_CHECK_RESULT(vkCreateRenderPass(vkDevice->logicalDevice, &renderPassInfo, nullptr, &renderPass));
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colorReference;
+    // Pass our resolve attachments to the sub pass
+    subpass.pResolveAttachments = &resolveReference;
+    subpass.pDepthStencilAttachment = &depthReference;
+
+    std::array<VkSubpassDependency, 2> dependencies;
+
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo = Vk::Initializers::RenderPassCreateInfo();
+    renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+    renderPassInfo.pAttachments = attachments.data();
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = 2;
+    renderPassInfo.pDependencies = dependencies.data();
+
+    VK_CHECK_RESULT(vkCreateRenderPass(vkDevice->logicalDevice, &renderPassInfo, nullptr, &renderPass));
 }
 
 void CG::Engine::CreatePipelineCache()
@@ -577,17 +609,21 @@ void CG::Engine::CreatePipelineCache()
 
 void CG::Engine::SetupFrameBuffer()
 {
-	VkImageView attachments[2];
+	SetupMultisampleTarget();
 
-	// Depth/Stencil attachment is the same for all frame buffers
-	attachments[1] = depthStencil.view;
+	std::array<VkImageView, 4> attachments;
+
+    attachments[0] = multisampleTarget.color.view;
+    // attachment[1] = swapchain image
+    attachments[2] = multisampleTarget.depth.view;
+    attachments[3] = depthStencil.view;
 
 	VkFramebufferCreateInfo frameBufferCreateInfo = {};
 	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	frameBufferCreateInfo.pNext = NULL;
 	frameBufferCreateInfo.renderPass = renderPass;
-	frameBufferCreateInfo.attachmentCount = 2;
-	frameBufferCreateInfo.pAttachments = attachments;
+	frameBufferCreateInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
+	frameBufferCreateInfo.pAttachments = attachments.data();
 	frameBufferCreateInfo.width = engineConfig.width;
 	frameBufferCreateInfo.height = engineConfig.height;
 	frameBufferCreateInfo.layers = 1;
@@ -596,7 +632,7 @@ void CG::Engine::SetupFrameBuffer()
 	frameBuffers.resize(vkSwapChain->imageCount);
 	for (uint32_t i = 0; i < frameBuffers.size(); i++)
 	{
-		attachments[0] = vkSwapChain->buffers[i].view;
+		attachments[1] = vkSwapChain->buffers[i].view;
 		VK_CHECK_RESULT(vkCreateFramebuffer(vkDevice->logicalDevice, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
 	}
 }
@@ -718,6 +754,102 @@ void CG::Engine::DestroyCommandBuffers()
 {
 	VkDevice device = vkDevice->logicalDevice;
 	vkFreeCommandBuffers(device, vkCmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
+}
+
+void CG::Engine::SetupMultisampleTarget()
+{
+    assert((vkDevice->properties.limits.framebufferColorSampleCounts >= static_cast<VkSampleCountFlags>(sampleCount)) 
+		&& (vkDevice->properties.limits.framebufferDepthSampleCounts >= static_cast<VkSampleCountFlags>(sampleCount)));
+
+    // Color target
+    VkImageCreateInfo info = Vk::Initializers::ImageCreateInfo();
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.format = vkSwapChain->colorFormat;
+    info.extent.width = engineConfig.width;
+    info.extent.height = engineConfig.height;
+    info.extent.depth = 1;
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.samples = sampleCount;
+    info.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &info, nullptr, &multisampleTarget.color.image));
+
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(vkDevice->logicalDevice, multisampleTarget.color.image, &memReqs);
+    VkMemoryAllocateInfo memAlloc = Vk::Initializers::MemoryAllocateInfo();
+    memAlloc.allocationSize = memReqs.size;
+    VkBool32 lazyMemTypePresent;
+    memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT, &lazyMemTypePresent);
+    if (!lazyMemTypePresent)
+    {
+        // If lazy allocation disabled, use good old device allocation
+        memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAlloc, nullptr, &multisampleTarget.color.memory));
+    vkBindImageMemory(vkDevice->logicalDevice, multisampleTarget.color.image, multisampleTarget.color.memory, 0);
+
+    // Create image view for the MSAA target
+    VkImageViewCreateInfo viewInfo = Vk::Initializers::ImageViewCreateInfo();
+    viewInfo.image = multisampleTarget.color.image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = vkSwapChain->colorFormat;
+    viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    viewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &viewInfo, nullptr, &multisampleTarget.color.view));
+
+    // Depth target
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.format = vkDevice->depthFormat;
+    info.extent.width = engineConfig.width;
+    info.extent.height = engineConfig.height;
+    info.extent.depth = 1;
+    info.mipLevels = 1;
+    info.arrayLayers = 1;
+    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.samples = sampleCount;
+    // Image will only be used as a transient target
+    info.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &info, nullptr, &multisampleTarget.depth.image));
+
+    vkGetImageMemoryRequirements(vkDevice->logicalDevice, multisampleTarget.depth.image, &memReqs);
+    memAlloc = Vk::Initializers::MemoryAllocateInfo();
+    memAlloc.allocationSize = memReqs.size;
+
+    memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT, &lazyMemTypePresent);
+    if (!lazyMemTypePresent)
+    {
+        memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    }
+
+    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAlloc, nullptr, &multisampleTarget.depth.memory));
+    vkBindImageMemory(vkDevice->logicalDevice, multisampleTarget.depth.image, multisampleTarget.depth.memory, 0);
+
+    // Create image view for the MSAA target
+    viewInfo.image = multisampleTarget.depth.image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = vkDevice->depthFormat;
+    viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
+    viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
+    viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
+    viewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &viewInfo, nullptr, &multisampleTarget.depth.view));
 }
 
 bool CG::Engine::CheckValidationLayersSupport()

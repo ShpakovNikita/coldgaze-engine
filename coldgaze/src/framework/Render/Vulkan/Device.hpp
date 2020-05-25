@@ -3,6 +3,7 @@
 #include "vulkan\vulkan_core.h"
 #include <vector>
 #include <string>
+#include <mutex>
 
 #define VK_FLAGS_NONE 0
 // Default fence timeout in nanoseconds
@@ -41,6 +42,9 @@ namespace CG
 
 			/** @brief Set to true when the debug marker extension is detected */
 			bool enableDebugMarkers = false;
+
+			/** @brief Lock it when using device queue */
+			std::mutex deviceQueueMutex;
 
 			/** @brief Contains queue family indices */
 			struct
@@ -171,6 +175,8 @@ namespace CG
 			* @return True if the extension is supported (present in the list read at device creation time)
 			*/
 			bool ExtensionSupported(std::string extension);
+
+			VkSampleCountFlagBits GetMaxUsableSampleCount();
 
 		};
 	}

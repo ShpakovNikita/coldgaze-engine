@@ -4,6 +4,7 @@
 #include "Render/Vulkan/Debug.hpp"
 #include "Render/Vulkan/Buffer.hpp"
 #include "Render/Vulkan/Initializers.hpp"
+#include <algorithm>
 
 CG::Vk::Device::Device(VkPhysicalDevice physicalDevice)
 {
@@ -369,4 +370,16 @@ VkCommandBuffer CG::Vk::Device::CreateCommandBuffer(VkCommandBufferLevel level, 
 bool CG::Vk::Device::ExtensionSupported(std::string extension)
 {
     return (std::find(supportedExtensions.begin(), supportedExtensions.end(), extension) != supportedExtensions.end());
+}
+
+VkSampleCountFlagBits CG::Vk::Device::GetMaxUsableSampleCount()
+{
+    VkSampleCountFlags counts = std::min(properties.limits.framebufferColorSampleCounts, properties.limits.framebufferDepthSampleCounts);
+    if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+    if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+    if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+    if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+    if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+    if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+    return VK_SAMPLE_COUNT_1_BIT;
 }
