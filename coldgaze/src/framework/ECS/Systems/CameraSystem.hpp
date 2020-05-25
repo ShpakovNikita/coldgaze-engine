@@ -18,9 +18,10 @@ public:
 	virtual ~CameraSystem() = default;
 
 private:
+	static void UpdateCameraFirstPerson(CameraComponent& cameraComponent, float deltaTime);
+	static void UpdateCameraLookAt(CameraComponent& cameraComponent, float deltaTime);
+
 	static void UpdateCameraView(CameraComponent& cameraComponent);
-	static void UpdateCameraPosition(CameraComponent& cameraComponent, float deltaTime);
-	static void UpdateRotation(CameraComponent& cameraComponent, float deltaTime);
 	static void UpdateMousePos(CameraComponent& cameraComponent, int32_t x, int32_t y);
 
 	void UpdateUniformBuffers(CameraComponent& cameraComponent) const;

@@ -171,9 +171,10 @@ void CG::EngineImpl::BuildCommandBuffers()
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	cmdBufInfo.pNext = nullptr;
 
-	VkClearValue clearValues[2];
-	clearValues[0].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
-	clearValues[1].depthStencil = { 1.0f, 0 };
+	std::array<VkClearValue, 3> clearValues;
+    clearValues[0].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
+    clearValues[1].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
+	clearValues[2].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
 	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -183,8 +184,8 @@ void CG::EngineImpl::BuildCommandBuffers()
 	renderPassBeginInfo.renderArea.offset.y = 0;
 	renderPassBeginInfo.renderArea.extent.width = engineConfig.width;
 	renderPassBeginInfo.renderArea.extent.height = engineConfig.height;
-	renderPassBeginInfo.clearValueCount = 3;
-	renderPassBeginInfo.pClearValues = clearValues;
+	renderPassBeginInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+	renderPassBeginInfo.pClearValues = clearValues.data();
 
 	BuildUiCommandBuffers();
 

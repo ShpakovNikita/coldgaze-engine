@@ -8,5 +8,5 @@ void CameraComponent::UpdateViewport(uint32_t width, uint32_t height)
 	viewport.width = width;
 
 	uboVS.projectionMatrix = glm::perspective(glm::radians(fov),
-		static_cast<float>(viewport.width) / static_cast<float>(viewport.height), 0.1f, 256.0f);
+		static_cast<float>(viewport.width) / static_cast<float>(viewport.height), 0.001f, 256.0f);
 }

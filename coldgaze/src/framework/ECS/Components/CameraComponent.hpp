@@ -8,8 +8,8 @@ struct CameraComponent
 {	
 	enum class CameraType
 	{
-		LOOK_AT = 0,
-		FIRST_PERSON,
+		kLookAt = 0,
+		kFirstPerson,
 	};
 
 	struct ViewportParams
@@ -30,19 +30,23 @@ struct CameraComponent
 		bool right = false;
 		bool left = false;
 
+		float wheelDelta = 0.0f;
+
 		bool leftMouse = false;
+		bool rightMouse = false;
 
 		glm::vec2 newMousePos = { 0.0f, 0.0f };
 		glm::vec2 oldMousePos = { 0.0f, 0.0f };
 
 		inline bool IsRotating() const { return leftMouse; }
-		inline bool IsMoving() const { return up || down || right || left; }
+		inline bool IsMoving() const { return up || down || right || left || wheelDelta > 0.0f; }
 	} input = {};
 
 	float zoom = 1.0f;
 
+	// glm::vec3 rotation = glm::vec3(0.0f, 90.0f, 0.0f);
 	glm::vec3 rotation = glm::vec3(180.0f, 0.0f, 0.0f);
-	glm::vec3 position = glm::vec3(0.0f, 0.0f, -zoom);
+	glm::vec3 position = glm::vec3(0.0f, 0.0f, zoom);
 
 	// TODO: remove device and memory
 	CG::Vk::Device* vkDevice;
@@ -55,7 +59,7 @@ struct CameraComponent
 
 	bool isActive = true;
 
-	CameraType cameraType = CameraType::LOOK_AT;
+	CameraType cameraType = CameraType::kFirstPerson;
 
 	void UpdateViewport(uint32_t width, uint32_t height);
 };

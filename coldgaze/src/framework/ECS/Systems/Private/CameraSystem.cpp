@@ -12,14 +12,13 @@ void CameraSystem::Update(float deltaTime, entt::registry& registry)
 {
 	registry.view<CameraComponent>().each([this, deltaTime](CameraComponent &cameraComponent)
 		{
-			if (cameraComponent.input.IsRotating())
+			if (cameraComponent.cameraType == CameraComponent::CameraType::kLookAt)
 			{
-				UpdateRotation(cameraComponent, deltaTime);
+				UpdateCameraLookAt(cameraComponent, deltaTime);
 			}
-
-			if (cameraComponent.input.IsMoving())
+			else
 			{
-				UpdateCameraPosition(cameraComponent, deltaTime);
+				UpdateCameraFirstPerson(cameraComponent, deltaTime);
 			}
 
 			UpdateCameraView(cameraComponent);
@@ -47,13 +46,12 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 		{
 			switch (component.cameraType)
 			{
-			case CameraComponent::CameraType::LOOK_AT:
+			case CameraComponent::CameraType::kLookAt:
 			{
-				component.zoom = glm::clamp(component.zoom + event.wheel.y * deltaTime * 10.0f, 0.0f, 5.0f);
-				component.position = glm::vec3(0.0f, 0.0f, -component.zoom);
+                component.input.wheelDelta = static_cast<float>(event.wheel.y);
 			}
 			break;
-			case CameraComponent::CameraType::FIRST_PERSON:
+			case CameraComponent::CameraType::kFirstPerson:
 			{
 				float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 100.0f;
 				component.movementSpeed = glm::clamp(speedDelta, 0.0f, 1.0f);
@@ -84,6 +82,9 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			case SDL_BUTTON_LEFT:
 				component.input.leftMouse = true;
 				UpdateMousePos(component, event.button.x, event.button.y);
+            case SDL_BUTTON_RIGHT:
+                component.input.rightMouse = true;
+                UpdateMousePos(component, event.button.x, event.button.y);
 			default:
 				break;
 			}
@@ -100,6 +101,9 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			case SDL_BUTTON_LEFT:
 				component.input.leftMouse = false;
 				UpdateMousePos(component, event.button.x, event.button.y);
+            case SDL_BUTTON_RIGHT:
+                component.input.rightMouse = false;
+                UpdateMousePos(component, event.button.x, event.button.y);
 			default:
 				break;
 			}
@@ -155,6 +159,74 @@ void CameraSystem::SetDevice(const CG::Vk::Device* aVkDevice)
 	vkDevice = aVkDevice;
 }
 
+void CameraSystem::UpdateCameraFirstPerson(CameraComponent& cameraComponent, float deltaTime)
+{
+    if (cameraComponent.input.IsRotating())
+    {
+        float dx = cameraComponent.input.newMousePos.x - cameraComponent.input.oldMousePos.x;
+        float dy = cameraComponent.input.newMousePos.y - cameraComponent.input.oldMousePos.y;
+
+        cameraComponent.rotation += glm::vec3(-dy * cameraComponent.sensitivity * deltaTime * 100.0f, 
+			-dx * cameraComponent.sensitivity * deltaTime * 100.0f, 0.0f);
+
+        cameraComponent.input.oldMousePos.x = cameraComponent.input.newMousePos.x;
+        cameraComponent.input.oldMousePos.y = cameraComponent.input.newMousePos.y;
+    }
+
+    if (cameraComponent.input.IsMoving())
+    {
+        glm::vec3 camForwardVector;
+        camForwardVector.x = -cos(glm::radians(cameraComponent.rotation.x)) * sin(glm::radians(cameraComponent.rotation.y));
+        camForwardVector.y = sin(glm::radians(cameraComponent.rotation.x));
+        camForwardVector.z = cos(glm::radians(cameraComponent.rotation.x)) * cos(glm::radians(cameraComponent.rotation.y));
+        camForwardVector = glm::normalize(camForwardVector);
+
+        float moveSpeed = deltaTime * cameraComponent.movementSpeed;
+
+        if (cameraComponent.input.up)
+            cameraComponent.position += camForwardVector * moveSpeed;
+        if (cameraComponent.input.down)
+            cameraComponent.position -= camForwardVector * moveSpeed;
+        if (cameraComponent.input.left)
+            cameraComponent.position += glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+        if (cameraComponent.input.right)
+            cameraComponent.position -= glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+    }
+}
+
+void CameraSystem::UpdateCameraLookAt(CameraComponent& cameraComponent, float deltaTime)
+{
+    if (cameraComponent.input.leftMouse)
+    {
+        float dx = cameraComponent.input.newMousePos.x - cameraComponent.input.oldMousePos.x;
+        float dy = cameraComponent.input.newMousePos.y - cameraComponent.input.oldMousePos.y;
+
+        cameraComponent.rotation += glm::vec3(-dy * cameraComponent.sensitivity * deltaTime * 100.0f,
+            -dx * cameraComponent.sensitivity * deltaTime * 100.0f, 0.0f);
+
+        cameraComponent.input.oldMousePos.x = cameraComponent.input.newMousePos.x;
+        cameraComponent.input.oldMousePos.y = cameraComponent.input.newMousePos.y;
+    }
+	else if (cameraComponent.input.rightMouse)
+	{
+        glm::vec3 camForwardVector;
+        camForwardVector.x = -cos(glm::radians(cameraComponent.rotation.x)) * sin(glm::radians(cameraComponent.rotation.y));
+        camForwardVector.y = sin(glm::radians(cameraComponent.rotation.x));
+        camForwardVector.z = cos(glm::radians(cameraComponent.rotation.x)) * cos(glm::radians(cameraComponent.rotation.y));
+        camForwardVector = glm::normalize(camForwardVector);
+
+        // float moveSpeed = deltaTime * cameraComponent.movementSpeed;
+	}
+
+	{
+		float moveSpeed = deltaTime * cameraComponent.movementSpeed * 10.0f;
+		float newZoom = glm::max(0.0f, cameraComponent.zoom + cameraComponent.input.wheelDelta * moveSpeed);
+
+		cameraComponent.zoom = newZoom;
+		cameraComponent.input.wheelDelta = 0.0f;
+	}
+}
+
 void CameraSystem::UpdateCameraView(CameraComponent& cameraComponent)
 {
 	CameraComponent::CameraUniforms& uboVS = cameraComponent.uboVS;
@@ -172,10 +244,10 @@ void CameraSystem::UpdateCameraView(CameraComponent& cameraComponent)
 
 	switch (cameraComponent.cameraType)
 	{
-	case CameraComponent::CameraType::LOOK_AT:
+	case CameraComponent::CameraType::kLookAt:
 		uboVS.viewMatrix = translationMatrix * rotationMatrix;
 		break;
-	case CameraComponent::CameraType::FIRST_PERSON:
+	case CameraComponent::CameraType::kFirstPerson:
 		uboVS.viewMatrix = rotationMatrix * translationMatrix;
 		break;
 	default:
@@ -190,38 +262,6 @@ void CameraSystem::UpdateUniformBuffers(CameraComponent& cameraComponent) const
 	cameraComponent.uniformBufferVS.buffer.Map(sizeof(uboVS));
 	cameraComponent.uniformBufferVS.buffer.CopyTo(&uboVS, sizeof(uboVS));
 	cameraComponent.uniformBufferVS.buffer.Unmap();
-}
-
-void CameraSystem::UpdateCameraPosition(CameraComponent& cameraComponent, float deltaTime)
-{
-	glm::vec3 camForwardVector;
-	camForwardVector.x = -cos(cameraComponent.rotation.x) * sin(cameraComponent.rotation.y);
-	camForwardVector.y = sin(cameraComponent.rotation.x);
-	camForwardVector.z = cos(cameraComponent.rotation.x) * cos(cameraComponent.rotation.y);
-	camForwardVector = glm::normalize(camForwardVector);
-
-	float moveSpeed = deltaTime * cameraComponent.movementSpeed;
-
-	if (cameraComponent.input.up)
-		cameraComponent.position += camForwardVector * moveSpeed;
-	if (cameraComponent.input.down)
-		cameraComponent.position -= camForwardVector * moveSpeed;
-	if (cameraComponent.input.left)
-		cameraComponent.position -= glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
-	if (cameraComponent.input.right)
-		cameraComponent.position += glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
-}
-
-void CameraSystem::UpdateRotation(CameraComponent& cameraComponent, float deltaTime)
-{
-	float dx = cameraComponent.input.newMousePos.x - cameraComponent.input.oldMousePos.x;
-	float dy = cameraComponent.input.newMousePos.y - cameraComponent.input.oldMousePos.y;
-
-	cameraComponent.rotation += glm::vec3(dy * cameraComponent.sensitivity * deltaTime * 100.0f, -dx * cameraComponent.sensitivity * deltaTime * 100.0f, 0.0f);
-
-	cameraComponent.input.oldMousePos.x = cameraComponent.input.newMousePos.x;
-	cameraComponent.input.oldMousePos.y = cameraComponent.input.newMousePos.y;
-
 }
 
 void CameraSystem::UpdateMousePos(CameraComponent& cameraComponent, int32_t x, int32_t y)
