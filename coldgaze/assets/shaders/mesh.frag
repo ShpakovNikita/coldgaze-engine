@@ -4,17 +4,18 @@ layout (set = 1, binding = 0) uniform sampler2D samplerAlbedoMap;
 layout (set = 1, binding = 1) uniform sampler2D samplerNormalMap;
 layout (set = 1, binding = 2) uniform sampler2D samplerOcclusionRoughnessMetallicMap;
 
+#define lightCount 6
+
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec3 inViewVec;
-layout (location = 4) in vec3 inLightVec;
-layout (location = 5) in vec3 inWorldPos;
-layout (location = 6) in vec3 inLightPos;
+layout (location = 4) in vec3 inWorldPos;
+layout (location = 5) in vec3 inLightPosVec[lightCount];
+layout (location = 11) in vec3 inLightColorVec[lightCount];
 
 layout (location = 0) out vec4 outFragColor;
 
-const vec3 LIGHT_COLOR = vec3(23.47, 21.31, 20.79);
 const float DIELECTRIC_REFLECTION_APPROXIMATION = 0.04;
 const float PI = 3.14159265359;
 
@@ -66,11 +67,10 @@ float calculateAttenuation(vec3 fragPos, vec3 lightPos)
 }
 
 // Result reflection
-vec3 BRDF_CookTorrance(float occlusion, float roughness, float metalness, vec3 albedo, vec3 N, vec3 V, vec3 L)
+vec3 BRDF_CookTorrance(float occlusion, float roughness, float metalness, vec3 albedo, vec3 N, vec3 V, vec3 L, vec3 lightPos, vec3 lightColor)
 {
-    // For each light source...
-    float lightAttenuation = calculateAttenuation(inWorldPos, inLightPos);
-    vec3 radiance = LIGHT_COLOR * lightAttenuation;
+    float lightAttenuation = calculateAttenuation(inWorldPos, lightPos);
+    vec3 radiance = lightColor * lightAttenuation;
     
     // We want to find material indices of refraction for Fresnel approximation
     vec3 F0 = vec3(DIELECTRIC_REFLECTION_APPROXIMATION);
@@ -118,20 +118,23 @@ vec3 perturbNormal()
 
 void main() 
 {
-    vec3 L = -normalize(inLightVec);
     vec3 N = perturbNormal();
 	vec3 V = normalize(inViewVec);
-    vec3 R = reflect(L, N);
  
 	vec4 albedo = texture(samplerAlbedoMap, inUV) * vec4(inColor, 1.0); 
     float occlusion = texture(samplerOcclusionRoughnessMetallicMap, inUV).r;
     float roughness = texture(samplerOcclusionRoughnessMetallicMap, inUV).g;
     float metalness = texture(samplerOcclusionRoughnessMetallicMap, inUV).b;
     
-    vec3 brdf = BRDF_CookTorrance(occlusion, roughness, metalness, albedo.xyz, N, V, L);
+    vec3 radiance = vec3(0.0);
+    for (int i = 0; i < lightCount; ++i)
+	{			
+        vec3 L = normalize(inLightPosVec[i] - inWorldPos);	
+        radiance += BRDF_CookTorrance(occlusion, roughness, metalness, albedo.xyz, N, V, L, inLightPosVec[i], inLightColorVec[i]);
+    }
     
     vec3 ambient = vec3(0.03) * albedo.xyz * occlusion;
-    vec3 color = ambient + brdf;   
+    vec3 color = ambient + radiance;   
     
     // Tone compression 
     color = color / (color + vec3(1.0));

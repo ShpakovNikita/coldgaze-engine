@@ -95,6 +95,7 @@ VkPhysicalDeviceFeatures CG::EngineImpl::GetEnabledDeviceFeatures() const
 		enabledFeatures.fillModeNonSolid = VK_TRUE;
 	}
 
+
     if (availableFeatures.sampleRateShading) {
         enabledFeatures.sampleRateShading = VK_TRUE;
     }
@@ -344,6 +345,21 @@ void CG::EngineImpl::UpdateUniformBuffers()
 {
 	uboData.projection = cameraComponent->uboVS.projectionMatrix;
 	uboData.view = cameraComponent->uboVS.viewMatrix;
+	uboData.lightPosPushConstants.fill(glm::vec4(0.0f));
+	uboData.lightColorPushConstants.fill(glm::vec4(0.0f));
+
+    uboData.lightPosPushConstants[0] = glm::vec4(1.5f, 1.5f, -1.5f, 0.0f);
+    uboData.lightColorPushConstants[0] = glm::vec4(23.47f, 21.31f, 20.79f, 0.0f);
+	
+	uboData.lightPosPushConstants[1] = glm::vec4(-1.5f, 1.0f, -1.0f, 0.0f);
+    uboData.lightColorPushConstants[1] = glm::vec4(16.47f, 11.31f, 22.79f, 0.0f) * 0.1f;
+
+    uboData.lightPosPushConstants[2] = glm::vec4(0.1f, 2.5f, -1.5f, 0.0f);
+    uboData.lightColorPushConstants[2] = glm::vec4(13.47f, 25.31f, 23.79f, 0.0f) * 0.03f;
+
+    uboData.lightPosPushConstants[3] = glm::vec4(1.5f, -1.5f, 1.5f, 0.0f);
+    uboData.lightColorPushConstants[3] = glm::vec4(14.47f, 11.31f, 27.79f, 0.0f) * 0.03f;
+
 	ubo.CopyTo(&uboData, sizeof(uboData));
 }
 

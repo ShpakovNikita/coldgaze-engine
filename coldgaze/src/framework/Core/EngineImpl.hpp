@@ -6,6 +6,8 @@
 #include "Render/Vulkan/Buffer.hpp"
 #include <mutex>
 #include <thread>
+#include <array>
+#include "glm/ext/vector_float4.hpp"
 
 struct CameraComponent;
 
@@ -59,7 +61,8 @@ namespace CG
 		{
 			glm::mat4 projection;
 			glm::mat4 view;
-			glm::vec4 lightPos = glm::vec4(1.5f, 1.5f, -1.5f, 1.0f);
+            std::array<glm::vec4, 6> lightPosPushConstants;
+            std::array<glm::vec4, 6> lightColorPushConstants;
 		} uboData = {};
 
 		Vk::Buffer ubo;
