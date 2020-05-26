@@ -13,3 +13,6 @@
 [submodule "coldgaze/include/nativefiledialog"]
 	path = coldgaze/include/nativefiledialog
 	url = https://github.com/mlabbe/nativefiledialog.git
+[submodule "coldgaze/include/stb"]
+	path = coldgaze/include/stb
+	url = https://github.com/nothings/stb.git

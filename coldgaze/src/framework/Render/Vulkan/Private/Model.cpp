@@ -14,6 +14,7 @@
 #include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Debug.hpp"
 #include <mutex>
+#include "Render/Vulkan/Exceptions.hpp"
 
 namespace SGLTFModel
 {

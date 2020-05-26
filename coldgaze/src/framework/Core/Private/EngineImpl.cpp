@@ -19,6 +19,8 @@
 #include "Render\Vulkan\Texture2D.hpp"
 #include <include/nfd.h>
 #include "SDL2\SDL_messagebox.h"
+#include "Render\Vulkan\Exceptions.hpp"
+#include "Render\Vulkan\CubeTexture.hpp"
 
 using namespace CG;
 
@@ -62,12 +64,12 @@ void CG::EngineImpl::Prepare()
 {
     Engine::Prepare();
 
-	// InitRayTracing();
 	SetupSystems();
 
 	PrepareUniformBuffers();
 	SetupDescriptors();
 
+	LoadCubeMap(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
 	LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
 	PreparePipelines();
@@ -76,6 +78,7 @@ void CG::EngineImpl::Prepare()
 
 void CG::EngineImpl::Cleanup()
 {
+	testCubeTexture = nullptr;
 	testModel = nullptr;
 	imGui = nullptr;
 
@@ -462,7 +465,7 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
             testModel->SetLoaded(true);
         }
     }
-    catch (const Vk::GLTFModel::AssetLoadingException & e)
+    catch (const Vk::AssetLoadingException& e)
     {
 		std::cerr << e.what() << std::endl;
 
@@ -481,4 +484,10 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
 			throw std::runtime_error("Error while trying to display SDL message box:" + std::string(SDL_GetError()));
         }
     }
+}
+
+void CG::EngineImpl::LoadCubeMap(const std::string& cubeMapFilePath)
+{
+	testCubeTexture = std::make_unique<Vk::CubeTexture>();
+	testCubeTexture->LoadFromFile(cubeMapFilePath, vkDevice, queue);
 }

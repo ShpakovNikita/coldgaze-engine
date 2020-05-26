@@ -53,7 +53,7 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			break;
 			case CameraComponent::CameraType::kFirstPerson:
 			{
-				float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 100.0f;
+				float speedDelta = component.movementSpeed + event.wheel.y * deltaTime * 5.0f;
 				component.movementSpeed = glm::clamp(speedDelta, 0.0f, 1.0f);
 			}
 			break;

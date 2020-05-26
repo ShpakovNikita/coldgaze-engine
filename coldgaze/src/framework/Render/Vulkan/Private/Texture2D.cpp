@@ -43,7 +43,7 @@ void CG::Vk::Texture2D::FromBuffer(
 	VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAllocInfo, nullptr, &stagingMemory));
 	VK_CHECK_RESULT(vkBindBufferMemory(vkDevice->logicalDevice, stagingBuffer, stagingMemory, 0));
 
-	uint8_t* data;
+	void* data;
 	VK_CHECK_RESULT(vkMapMemory(device->logicalDevice, stagingMemory, 0, memReqs.size, 0, (void**)& data));
 	memcpy(data, buffer, bufferSize);
 	vkUnmapMemory(device->logicalDevice, stagingMemory);
@@ -144,11 +144,3 @@ void CG::Vk::Texture2D::FromBuffer(
 
 	UpdateDescriptor();
 }
-
-void CG::Vk::Texture2D::UpdateDescriptor()
-{
-	descriptor.sampler = sampler;
-	descriptor.imageView = view;
-	descriptor.imageLayout = imageLayout;
-}
-

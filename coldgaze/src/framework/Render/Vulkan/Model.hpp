@@ -10,7 +10,6 @@
 #include <memory>
 #include "Buffer.hpp"
 #include "Texture2D.hpp"
-#include <vcruntime_exception.h>
 
 namespace std { class mutex; }
 
@@ -77,11 +76,6 @@ namespace CG
 		class GLTFModel
 		{
 		public:
-			struct AssetLoadingException : public std::exception
-			{
-				AssetLoadingException(const char* msg) : std::exception(msg) {}
-			};
-
 			Device* vkDevice = nullptr;
 			VkQueue queue;
 

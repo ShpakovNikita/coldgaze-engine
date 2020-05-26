@@ -16,6 +16,7 @@ namespace CG
 		struct UniformBufferVS;
 		class GLTFModel;
 		class ImGuiImpl;
+		class CubeTexture;
 	}
 	struct EngineConfig; 
 }
@@ -95,6 +96,8 @@ namespace CG
 		void LoadModel(const std::string& modelFilePath);
 		void LoadModelAsync(const std::string& modelFilePath);
 
+		void LoadCubeMap(const std::string& cubeMapFilePath);
+
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
 		VkPipelineLayout pipelineLayout = {};
@@ -103,9 +106,6 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		std::unique_ptr<Vk::GLTFModel> testModel;
-		/*
-		std::mutex modelLoadingMutex;
-		std::unique_ptr<std::thread> modelLoadingTread;
-		*/
+		std::unique_ptr<Vk::CubeTexture> testCubeTexture;
     };
 }

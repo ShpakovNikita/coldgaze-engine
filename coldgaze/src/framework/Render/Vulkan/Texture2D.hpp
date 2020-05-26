@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan/vulkan_core.h"
+#include "Texture.hpp"
 
 
 namespace CG
@@ -9,7 +10,8 @@ namespace CG
 	{
 		class Device;
 
-		class Texture2D
+		class Texture2D : 
+			public Texture
 		{
 		public:
 			void FromBuffer(
@@ -23,20 +25,6 @@ namespace CG
 				VkFilter filter = VK_FILTER_LINEAR,
 				VkImageUsageFlags imageUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT,
 				VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-			VkDescriptorImageInfo descriptor = {};
-
-		private:
-			void UpdateDescriptor();
-
-			const Device* vkDevice = nullptr;
-			uint32_t height = 0, width = 0;
-			uint16_t mipLevels = 0;
-			VkImage image = {};
-			VkDeviceMemory deviceMemory = {};
-			VkImageLayout imageLayout = {};
-			VkSampler sampler = {};
-			VkImageView view = {};
 		};
 	}
 }
