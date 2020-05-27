@@ -18,7 +18,7 @@ namespace CG
 		struct UniformBufferVS;
 		class GLTFModel;
 		class ImGuiImpl;
-		class CubeTexture;
+		class SkyBox;
 	}
 	struct EngineConfig; 
 }
@@ -40,20 +40,13 @@ namespace CG
 
     private:
 		struct UISettings {
-			enum class ePipeline
-			{
-				kSolidSampleShading = 1,
-				kWire = 2,
-			};
-
 			std::array<float, 50> frameTimes{};
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
 			glm::vec4 bgColor = { 0.569f, 0.553f, 0.479f, 1.0f };
 			bool isActive = true;
 			bool drawWire = false;
 			bool useSampleShading = false;
-
-			ePipeline enabledPipeline = ePipeline::kSolidSampleShading;
+			float fov = 60.f;
 
 		} uiData = {};
 
@@ -75,7 +68,7 @@ namespace CG
 		struct RenderPipelines
 		{
 			VkPipeline wireframe;
-			VkPipeline solidMSAA;
+			VkPipeline solidPBR_MSAA;
 		} pipelines = {};
 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
@@ -99,7 +92,7 @@ namespace CG
 		void LoadModel(const std::string& modelFilePath);
 		void LoadModelAsync(const std::string& modelFilePath);
 
-		void LoadCubeMap(const std::string& cubeMapFilePath);
+		void LoadSkybox(const std::string& cubeMapFilePath);
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
@@ -108,7 +101,7 @@ namespace CG
 		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
-		std::unique_ptr<Vk::GLTFModel> testModel;
-		std::unique_ptr<Vk::CubeTexture> testCubeTexture;
+		std::unique_ptr<Vk::GLTFModel> testScene;
+		std::unique_ptr<Vk::SkyBox> testSkybox;
     };
 }

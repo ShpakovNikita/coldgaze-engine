@@ -14,7 +14,8 @@ void CG::Vk::Texture2D::FromBuffer(
 	VkQueue copyQueue,
 	VkFilter filter /*= VK_FILTER_LINEAR*/,
 	VkImageUsageFlags imageUsageFlags /*= VK_IMAGE_USAGE_SAMPLED_BIT*/,
-	VkImageLayout aImageLayout /*= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL*/)
+	VkImageLayout aImageLayout /*= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL*/,
+	VkImageTiling imageTiling /*= VK_IMAGE_TILING_OPTIMAL*/)
 {
 	vkDevice = device;
 	width = texWidth;
@@ -64,7 +65,7 @@ void CG::Vk::Texture2D::FromBuffer(
 	imageCreateInfo.mipLevels = mipLevels;
 	imageCreateInfo.arrayLayers = 1;
 	imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageCreateInfo.tiling = imageTiling;
 	imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 	imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageCreateInfo.extent = { width, height, 1 };

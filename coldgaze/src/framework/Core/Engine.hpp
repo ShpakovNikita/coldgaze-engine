@@ -49,7 +49,7 @@ namespace CG
 		const Window* GetCurrentWindow() const;
 		const uint32_t GetSampleCount() const;
 
-		// TODO: move to some renderer interface
+		// TODO: move to some shader manager
 		VkPipelineShaderStageCreateInfo LoadShader(const std::string& filename, VkShaderStageFlagBits stage);
 		const std::string GetAssetPath() const;
 

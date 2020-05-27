@@ -20,7 +20,7 @@
 #include <include/nfd.h>
 #include "SDL2\SDL_messagebox.h"
 #include "Render\Vulkan\Exceptions.hpp"
-#include "Render\Vulkan\CubeTexture.hpp"
+#include "Render\Vulkan\SkyBox.hpp"
 
 using namespace CG;
 
@@ -69,7 +69,7 @@ void CG::EngineImpl::Prepare()
 	PrepareUniformBuffers();
 	SetupDescriptors();
 
-	LoadCubeMap(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
+	LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
 	LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
 	PreparePipelines();
@@ -78,8 +78,8 @@ void CG::EngineImpl::Prepare()
 
 void CG::EngineImpl::Cleanup()
 {
-	testCubeTexture = nullptr;
-	testModel = nullptr;
+	testSkybox = nullptr;
+	testScene = nullptr;
 	imGui = nullptr;
 
 	Engine::Cleanup();
@@ -173,7 +173,7 @@ void CG::EngineImpl::PreparePipelines()
 	blendAttachmentStateCreateInfo.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 	blendAttachmentStateCreateInfo.alphaBlendOp = VK_BLEND_OP_ADD;
 
-	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidMSAA));
+	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidPBR_MSAA));
 
 	// Wire frame rendering pipeline
 	if (vkDevice->enabledFeatures.fillModeNonSolid) {
@@ -229,12 +229,18 @@ void CG::EngineImpl::BuildCommandBuffers()
 		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
 		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
 
-		vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
-		vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solidMSAA);
+        if (testSkybox)
+        {
+            // all pipelines placed inside class
+            testSkybox->Draw(drawCmdBuffers[i]);
+        }
 
-		if (testModel && testModel->IsLoaded())
+		if (testScene && testScene->IsLoaded())
 		{
-			testModel->Draw(drawCmdBuffers[i], pipelineLayout);
+            vkCmdBindDescriptorSets(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
+            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, uiData.drawWire ? pipelines.wireframe : pipelines.solidPBR_MSAA);
+
+			testScene->Draw(drawCmdBuffers[i], pipelineLayout);
 		}
 
 		imGui->DrawFrame(drawCmdBuffers[i]);
@@ -300,10 +306,10 @@ void CG::EngineImpl::SetupDescriptors()
 void CG::EngineImpl::BindModelMaterials()
 {
     // TODO: optimize storage in images
-    std::vector<Vk::GLTFModel::Image>& images = testModel->GetImages();
-    const std::vector<Vk::GLTFModel::Texture>& textures = testModel->GetTextures();
+    std::vector<Vk::GLTFModel::Image>& images = testScene->GetImages();
+    const std::vector<Vk::GLTFModel::Texture>& textures = testScene->GetTextures();
 
-    for (auto& material : testModel->GetMaterials())
+    for (auto& material : testScene->GetMaterials())
     {
         auto& baseColorImage = images[textures[material.baseColorTextureIndex].imageIndex];
         auto& normalMapImage = images[textures[material.normalMapTextureIndex].imageIndex];
@@ -375,6 +381,11 @@ void CG::EngineImpl::UpdateUniformBuffers()
     uboData.lightColorPushConstants[3] = glm::vec4(14.47f, 11.31f, 27.79f, 0.0f) * 0.04f;
 
 	ubo.CopyTo(&uboData, sizeof(uboData));
+
+	if (testSkybox)
+	{
+		testSkybox->UpdateCameraUniformBuffer(cameraComponent);
+	}
 }
 
 void CG::EngineImpl::SetupSystems()
@@ -405,6 +416,9 @@ void CG::EngineImpl::DrawUI()
 		const float dummyData[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
 		ImGui::PlotLines("Frame Times", dummyData, IM_ARRAYSIZE(dummyData));
 
+		ImGui::SliderFloat("Camera FOV:", &uiData.fov, 10.0f, 135.0f);
+		cameraComponent->fov = uiData.fov;
+
 		ImGui::End();
 	}
 
@@ -415,19 +429,7 @@ void CG::EngineImpl::DrawUI()
             {
                 ImGui::MenuItem("File menu", nullptr, false, false);
 				{
-                    bool isOpenFileEnabled = false;
-
-					/*
-					if (std::unique_lock<std::mutex> lock(modelLoadingMutex, std::try_to_lock); 
-						lock.owns_lock() && (!testModel || testModel->IsLoaded()))
-					{
-						isOpenFileEnabled = true;
-					}
-					*/
-
-					isOpenFileEnabled = true;
-
-					if (ImGui::MenuItem("Open", "Ctrl+O", false, isOpenFileEnabled))
+					if (ImGui::MenuItem("Open scene", "*.gltf"))
 					{
 						nfdchar_t* outPath = nullptr;
 # pragma warning(push)
@@ -443,6 +445,23 @@ void CG::EngineImpl::DrawUI()
 							std::cerr << NFD_GetError() << std::endl;
 						}
 					}
+
+                    if (ImGui::MenuItem("Set skybox", "*.hdr"))
+                    {
+                        nfdchar_t* outPath = nullptr;
+# pragma warning(push)
+# pragma warning(disable : 26812)
+                        nfdresult_t result = NFD_OpenDialog(nullptr, nullptr, &outPath);
+# pragma warning(pop)
+                        if (result == NFD_OKAY) {
+                            LoadSkybox(outPath);
+                            free(outPath);
+                        }
+                        else if (result == NFD_ERROR)
+                        {
+                            std::cerr << NFD_GetError() << std::endl;
+                        }
+                    }
 					ImGui::EndMenu();
 				}
             }
@@ -470,18 +489,18 @@ void CG::EngineImpl::BuildUiCommandBuffers()
 void CG::EngineImpl::LoadModel(const std::string& modelFilePath)
 {
 	{
-        if (testModel)
+        if (testScene)
         {
             UnbindModelMaterials();
         }
 
-        testModel = std::make_unique<Vk::GLTFModel>();
+        testScene = std::make_unique<Vk::GLTFModel>();
 
-        testModel->vkDevice = vkDevice;
-        testModel->queue = queue;
+        testScene->vkDevice = vkDevice;
+        testScene->queue = queue;
 	}
 
-	testModel->LoadFromFile(modelFilePath);
+	testScene->LoadFromFile(modelFilePath);
 }
 
 void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
@@ -492,7 +511,7 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
 
         {
             BindModelMaterials();
-            testModel->SetLoaded(true);
+            testScene->SetLoaded(true);
         }
     }
     catch (const Vk::AssetLoadingException& e)
@@ -516,8 +535,34 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
     }
 }
 
-void CG::EngineImpl::LoadCubeMap(const std::string& cubeMapFilePath)
+void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
 {
-	testCubeTexture = std::make_unique<Vk::CubeTexture>();
-	testCubeTexture->LoadFromFile(cubeMapFilePath, vkDevice, queue);
+	try
+	{
+        testSkybox = std::make_unique<Vk::SkyBox>(*this);
+        testSkybox->LoadFromFile(cubeMapFilePath, vkDevice, queue);
+		testSkybox->SetupDescriptorSet(descriptorPool);
+        testSkybox->PreparePipeline(renderPass, pipelineCache);
+	}
+    catch (const Vk::AssetLoadingException & e)
+    {
+		testSkybox = nullptr;
+
+        std::cerr << e.what() << std::endl;
+
+        const SDL_MessageBoxButtonData buttons[] = {
+            { /* .flags, .buttonid, .text */        0, 0, "ok" },
+        };
+        const SDL_MessageBoxData messageboxdata = {
+            SDL_MESSAGEBOX_INFORMATION,
+            NULL,
+            "Asset loading error",
+            e.what(),
+            SDL_arraysize(buttons),
+            buttons,
+        };
+        if (SDL_ShowMessageBox(&messageboxdata, nullptr) < 0) {
+            throw std::runtime_error("Error while trying to display SDL message box:" + std::string(SDL_GetError()));
+        }
+    }
 }
