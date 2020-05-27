@@ -22,7 +22,8 @@ const float PI = 3.14159265359;
 // Approximation of microfacets towards half-vector using Normal Distribution
 float NDF_GGXTR(vec3 N, vec3 H, float roughness)
 {
-    float a2 = roughness * roughness;
+    float a = roughness*roughness;
+    float a2 = a*a;
     float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH*NdotH;
 	
@@ -34,12 +35,15 @@ float NDF_GGXTR(vec3 N, vec3 H, float roughness)
 }
 
 // Geometry function
-float G_SchlickGGX(float NdotV, float k)
+float G_SchlickGGX(float NdotV, float roughness)
 {
-    float nom = NdotV;
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float num   = NdotV;
     float denom = NdotV * (1.0 - k) + k;
 	
-    return nom / denom;
+    return num / denom;
 }
 
 // This method covers geometry obstruction and shadowing cases
@@ -59,43 +63,30 @@ vec3 F_Schlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-// Simple squared attenuation
-float calculateAttenuation(vec3 fragPos, vec3 lightPos)
-{
-    float distance = length(fragPos - lightPos);
-    return 1.0 / (distance * distance);
-}
-
 // Result reflection
-vec3 BRDF_CookTorrance(float occlusion, float roughness, float metalness, vec3 albedo, vec3 N, vec3 V, vec3 L, vec3 lightPos, vec3 lightColor)
+vec3 BRDF_CookTorrance(float occlusion, float roughness, float metalness, vec3 albedo, vec3 N, vec3 V, vec3 F0, vec3 lightPos, vec3 lightColor)
 {
-    float lightAttenuation = calculateAttenuation(inWorldPos, lightPos);
-    vec3 radiance = lightColor * lightAttenuation;
-    
-    // We want to find material indices of refraction for Fresnel approximation
-    vec3 F0 = vec3(DIELECTRIC_REFLECTION_APPROXIMATION);
-    F0 = mix(F0, albedo.rgb, metalness);
-    
+    vec3 L = normalize(lightPos - inWorldPos);	
     vec3 H = normalize(V + L);
+    float distance = length(lightPos - inWorldPos);
+    float attenuation = 1.0 / (distance * distance);
+    vec3 radiance = lightColor * attenuation;        
     
-    float D = NDF_GGXTR(N, H, roughness);
-    float G = G_Smith(N, V, L, roughness);
-    vec3 F = F_Schlick(max(dot(H, V), 0.0), F0);
+    // Cook-Torrance BRDF
+    float NDF = NDF_GGXTR(N, H, roughness);        
+    float G = G_Smith(N, V, L, roughness);      
+    vec3 F = F_Schlick(max(dot(H, V), 0.0), F0);       
     
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metalness;	  
     
-    vec3 DFG = D * F * G;
+    vec3 numerator = NDF * G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
+    vec3 specular = numerator / max(denominator, 0.001);  
     
-    // Zero division pre-fire
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
-    vec3 specular = DFG / denominator; 
-    
-    vec3 lambert = kD * albedo / PI;
-    
-    float NdotL = max(dot(N, L), 0.0);        
-    return (lambert + specular) * radiance * NdotL;
+    float NdotL = max(dot(N, L), 0.0);                
+    return (kD * albedo.xyz / PI + specular) * radiance * NdotL; 
 }
 
 // More info http://www.thetenthplanet.de/archives/1180
@@ -121,16 +112,18 @@ void main()
     vec3 N = perturbNormal();
 	vec3 V = normalize(inViewVec);
  
-	vec4 albedo = texture(samplerAlbedoMap, inUV) * vec4(inColor, 1.0); 
+	vec4 albedo = texture(samplerAlbedoMap, inUV); 
     float occlusion = texture(samplerOcclusionRoughnessMetallicMap, inUV).r;
     float roughness = texture(samplerOcclusionRoughnessMetallicMap, inUV).g;
     float metalness = texture(samplerOcclusionRoughnessMetallicMap, inUV).b;
     
+    vec3 F0 = vec3(0.04); 
+    F0 = mix(F0, albedo.xyz, metalness);
+    
     vec3 radiance = vec3(0.0);
     for (int i = 0; i < lightCount; ++i)
 	{			
-        vec3 L = normalize(inLightPosVec[i] - inWorldPos);	
-        radiance += BRDF_CookTorrance(occlusion, roughness, metalness, albedo.xyz, N, V, L, inLightPosVec[i], inLightColorVec[i]);
+        radiance += BRDF_CookTorrance(occlusion, roughness, metalness, albedo.xyz, N, V, F0, inLightPosVec[i], inLightColorVec[i]);
     }
     
     vec3 ambient = vec3(0.03) * albedo.xyz * occlusion;
@@ -140,5 +133,5 @@ void main()
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0/2.2));  
     
-    outFragColor = vec4(color, 1.0);
+    outFragColor = vec4(color, albedo.a);
 }

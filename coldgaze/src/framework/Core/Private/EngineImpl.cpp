@@ -159,6 +159,20 @@ void CG::EngineImpl::PreparePipelines()
     multisampleStateCreateInfo.sampleShadingEnable = VK_TRUE;
     multisampleStateCreateInfo.minSampleShading = 0.25f;
 
+	blendAttachmentStateCreateInfo.blendEnable = VK_TRUE;
+	blendAttachmentStateCreateInfo.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendAttachmentStateCreateInfo.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+
+	blendAttachmentStateCreateInfo.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	blendAttachmentStateCreateInfo.blendEnable = VK_TRUE;
+	blendAttachmentStateCreateInfo.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	blendAttachmentStateCreateInfo.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	blendAttachmentStateCreateInfo.colorBlendOp = VK_BLEND_OP_ADD;
+	blendAttachmentStateCreateInfo.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	blendAttachmentStateCreateInfo.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	blendAttachmentStateCreateInfo.alphaBlendOp = VK_BLEND_OP_ADD;
+
 	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidMSAA));
 
 	// Wire frame rendering pipeline
@@ -350,15 +364,15 @@ void CG::EngineImpl::UpdateUniformBuffers()
 
     uboData.lightPosPushConstants[0] = glm::vec4(1.5f, 1.5f, -1.5f, 0.0f);
     uboData.lightColorPushConstants[0] = glm::vec4(23.47f, 21.31f, 20.79f, 0.0f);
-	
-	uboData.lightPosPushConstants[1] = glm::vec4(-1.5f, 1.0f, -1.0f, 0.0f);
+
+    uboData.lightPosPushConstants[1] = glm::vec4(-1.5f, 1.0f, -1.0f, 0.0f);
     uboData.lightColorPushConstants[1] = glm::vec4(16.47f, 11.31f, 22.79f, 0.0f) * 0.1f;
 
     uboData.lightPosPushConstants[2] = glm::vec4(0.1f, 2.5f, -1.5f, 0.0f);
     uboData.lightColorPushConstants[2] = glm::vec4(13.47f, 25.31f, 23.79f, 0.0f) * 0.03f;
 
     uboData.lightPosPushConstants[3] = glm::vec4(1.5f, -1.5f, 1.5f, 0.0f);
-    uboData.lightColorPushConstants[3] = glm::vec4(14.47f, 11.31f, 27.79f, 0.0f) * 0.03f;
+    uboData.lightColorPushConstants[3] = glm::vec4(14.47f, 11.31f, 27.79f, 0.0f) * 0.04f;
 
 	ubo.CopyTo(&uboData, sizeof(uboData));
 }
