@@ -8,6 +8,7 @@
 #include <thread>
 #include <array>
 #include "glm/ext/vector_float4.hpp"
+#include "Render/Vulkan/Texture.hpp"
 
 struct CameraComponent;
 
@@ -37,6 +38,7 @@ namespace CG
 		void Cleanup() override;
 
 		VkPhysicalDeviceFeatures GetEnabledDeviceFeatures() const override;
+		void CaptureEvent(const SDL_Event& event) override;
 
     private:
 		struct UISettings {
@@ -71,6 +73,11 @@ namespace CG
 			VkPipeline solidPBR_MSAA;
 		} pipelines = {};
 
+		struct Textures
+		{
+			Vk::Texture irradianceCube;
+		} textures = {};
+
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
 
 		void PreparePipelines();
@@ -93,6 +100,8 @@ namespace CG
 		void LoadModelAsync(const std::string& modelFilePath);
 
 		void LoadSkybox(const std::string& cubeMapFilePath);
+
+		void GenerateIrradianceSampler();
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 

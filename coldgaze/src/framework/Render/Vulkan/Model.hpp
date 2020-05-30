@@ -67,7 +67,7 @@ namespace CG
 				Node* parent = nullptr;
 				std::vector<Node> children;
 				Mesh mesh;
-				glm::mat4 localMatrix;
+				glm::mat4 matrix;
 			};
 
 			struct Material {

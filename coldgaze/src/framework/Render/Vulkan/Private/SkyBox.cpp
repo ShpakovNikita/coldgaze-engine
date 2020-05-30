@@ -206,6 +206,11 @@ void CG::Vk::SkyBox::SetupDescriptorSet(VkDescriptorPool descriptorPool)
 
 }
 
+CG::Vk::Texture2D* CG::Vk::SkyBox::GetTexture2D() const
+{
+    return sphericalSkyboxTexture.get();
+}
+
 void CG::Vk::SkyBox::CreateBoxModel()
 {
     std::array<float, 6 * 3 * 6> vertexBuffer = {
@@ -255,6 +260,7 @@ void CG::Vk::SkyBox::CreateBoxModel()
 
     for (size_t i = 0; i < vertexBuffer.size(); ++i)
     {
+        // This step is needed for wide camera FOVs
         vertexBuffer[i] *= 40.0f;
     }
 

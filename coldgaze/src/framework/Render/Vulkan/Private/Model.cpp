@@ -168,11 +168,11 @@ void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout
 {
 	if (node.mesh.primitives.size() > 0)
 	{
-		glm::mat4 worldMatrix = node.localMatrix;
+		glm::mat4 worldMatrix = node.matrix;
 		const Node* currentParent = node.parent;
 		while (currentParent) 
 		{
-			worldMatrix = currentParent->localMatrix * worldMatrix;
+			worldMatrix = currentParent->matrix * worldMatrix;
 			currentParent = currentParent->parent;
 		}
 		
@@ -293,26 +293,26 @@ void CG::Vk::GLTFModel::LoadNode(
 	std::vector<Vertex>& vertexBuffer)
 {
 	Node node = {};
-	node.localMatrix = glm::mat4(1.0f);
+	node.matrix = glm::mat4(1.0f);
 
 	// Get the local node matrix
 	// It's either made up from translation, rotation, scale or a 4x4 matrix
 	if (inputNode.translation.size() == 3) 
 	{
-		node.localMatrix = glm::translate(node.localMatrix, glm::vec3(glm::make_vec3(inputNode.translation.data())));
+		node.matrix = glm::translate(node.matrix, glm::vec3(glm::make_vec3(inputNode.translation.data())));
 	}
 	if (inputNode.rotation.size() == 4) 
 	{
 		glm::quat q = glm::make_quat(inputNode.rotation.data());
-		node.localMatrix *= glm::mat4(q);
+		node.matrix *= glm::mat4(q);
 	}
 	if (inputNode.scale.size() == 3) 
 	{
-		node.localMatrix = glm::scale(node.localMatrix, glm::vec3(glm::make_vec3(inputNode.scale.data())));
+		node.matrix = glm::scale(node.matrix, glm::vec3(glm::make_vec3(inputNode.scale.data())));
 	}
 	if (inputNode.matrix.size() == 16) 
 	{
-		node.localMatrix = glm::make_mat4x4(inputNode.matrix.data());
+		node.matrix = glm::make_mat4x4(inputNode.matrix.data());
 	};
 
 	// Load node's children 

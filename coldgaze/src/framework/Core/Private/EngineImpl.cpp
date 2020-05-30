@@ -21,6 +21,10 @@
 #include "SDL2\SDL_messagebox.h"
 #include "Render\Vulkan\Exceptions.hpp"
 #include "Render\Vulkan\SkyBox.hpp"
+#include "SDL2\SDL_events.h"
+#include "Render\Vulkan\Texture.hpp"
+#include "Render\Vulkan\Utils.hpp"
+#include "Render\Vulkan\LayoutDescriptor.hpp"
 
 using namespace CG;
 
@@ -69,7 +73,7 @@ void CG::EngineImpl::Prepare()
 	PrepareUniformBuffers();
 	SetupDescriptors();
 
-	LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
+	// LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
 	LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
 	PreparePipelines();
@@ -81,6 +85,8 @@ void CG::EngineImpl::Cleanup()
 	testSkybox = nullptr;
 	testScene = nullptr;
 	imGui = nullptr;
+
+    textures.irradianceCube.Destroy();
 
 	Engine::Cleanup();
 }
@@ -101,6 +107,21 @@ VkPhysicalDeviceFeatures CG::EngineImpl::GetEnabledDeviceFeatures() const
     }
 
 	return enabledFeatures;
+}
+
+void CG::EngineImpl::CaptureEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+		case SDL_KEYDOWN:
+		{
+			if (event.key.keysym.sym == SDLK_f) {
+				cameraComponent->position = glm::vec3(0.0f, 0.0f, 1.0f);
+				cameraComponent->rotation = glm::vec3(180.0f, 0.0f, 0.0f);
+			}
+		}
+		break;
+	}
 }
 
 void CG::EngineImpl::FlushCommandBuffer(VkCommandBuffer commandBuffer)
@@ -307,13 +328,13 @@ void CG::EngineImpl::BindModelMaterials()
 {
     // TODO: optimize storage in images
     std::vector<Vk::GLTFModel::Image>& images = testScene->GetImages();
-    const std::vector<Vk::GLTFModel::Texture>& textures = testScene->GetTextures();
+    const std::vector<Vk::GLTFModel::Texture>& sceneTextures = testScene->GetTextures();
 
     for (auto& material : testScene->GetMaterials())
     {
-        auto& baseColorImage = images[textures[material.baseColorTextureIndex].imageIndex];
-        auto& normalMapImage = images[textures[material.normalMapTextureIndex].imageIndex];
-        auto& metallicRoughnessImage = images[textures[material.metallicRoughnessTextureIndex].imageIndex];
+        auto& baseColorImage = images[sceneTextures[material.baseColorTextureIndex].imageIndex];
+        auto& normalMapImage = images[sceneTextures[material.normalMapTextureIndex].imageIndex];
+        auto& metallicRoughnessImage = images[sceneTextures[material.metallicRoughnessTextureIndex].imageIndex];
 
         const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
 
@@ -543,6 +564,7 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
         testSkybox->LoadFromFile(cubeMapFilePath, vkDevice, queue);
 		testSkybox->SetupDescriptorSet(descriptorPool);
         testSkybox->PreparePipeline(renderPass, pipelineCache);
+        GenerateIrradianceSampler();
 	}
     catch (const Vk::AssetLoadingException & e)
     {
@@ -565,4 +587,407 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
             throw std::runtime_error("Error while trying to display SDL message box:" + std::string(SDL_GetError()));
         }
     }
+}
+
+void CG::EngineImpl::GenerateIrradianceSampler()
+{
+    assert(testSkybox);
+
+    auto tStart = std::chrono::high_resolution_clock::now();
+
+    const VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    const int32_t dim = 64;
+    const uint32_t numMips = static_cast<uint32_t>(floor(log2(dim))) + 1;
+
+    // Pre-filtered cube map
+    // Image
+    VkImageCreateInfo imageCI = Vk::Initializers::ImageCreateInfo();
+    imageCI.imageType = VK_IMAGE_TYPE_2D;
+    imageCI.format = format;
+    imageCI.extent.width = dim;
+    imageCI.extent.height = dim;
+    imageCI.extent.depth = 1;
+    imageCI.mipLevels = numMips;
+    imageCI.arrayLayers = 6;
+    imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageCI.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &imageCI, nullptr, &textures.irradianceCube.image));
+
+    VkMemoryAllocateInfo irradianceCubeMemAlloc = Vk::Initializers::MemoryAllocateInfo();
+    VkMemoryRequirements irradianceCubeMemReqs;
+    vkGetImageMemoryRequirements(vkDevice->logicalDevice, textures.irradianceCube.image, &irradianceCubeMemReqs);
+    irradianceCubeMemAlloc.allocationSize = irradianceCubeMemReqs.size;
+    irradianceCubeMemAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(irradianceCubeMemReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &irradianceCubeMemAlloc, nullptr, &textures.irradianceCube.deviceMemory));
+    VK_CHECK_RESULT(vkBindImageMemory(vkDevice->logicalDevice, textures.irradianceCube.image, textures.irradianceCube.deviceMemory, 0));
+
+    // Image view
+    VkImageViewCreateInfo viewCI = Vk::Initializers::ImageViewCreateInfo();
+    viewCI.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    viewCI.format = format;
+    viewCI.subresourceRange = {};
+    viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewCI.subresourceRange.levelCount = numMips;
+    viewCI.subresourceRange.layerCount = 6;
+    viewCI.image = textures.irradianceCube.image;
+    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &viewCI, nullptr, &textures.irradianceCube.view));
+    // Sampler
+    VkSamplerCreateInfo samplerCI = Vk::Initializers::SamplerCreateInfo();
+    samplerCI.magFilter = VK_FILTER_LINEAR;
+    samplerCI.minFilter = VK_FILTER_LINEAR;
+    samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerCI.minLod = 0.0f;
+    samplerCI.maxLod = static_cast<float>(numMips);
+    samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    VK_CHECK_RESULT(vkCreateSampler(vkDevice->logicalDevice, &samplerCI, nullptr, &textures.irradianceCube.sampler));
+
+    textures.irradianceCube.descriptor.imageView = textures.irradianceCube.view;
+    textures.irradianceCube.descriptor.sampler = textures.irradianceCube.sampler;
+    textures.irradianceCube.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    textures.irradianceCube.vkDevice = vkDevice;
+
+    // FB, Att, RP, Pipe, etc.
+    VkAttachmentDescription attDesc = {};
+    // Color attachment
+    attDesc.format = format;
+    attDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+    attDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    attDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference colorReference = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+
+    VkSubpassDescription subpassDescription = {};
+    subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpassDescription.colorAttachmentCount = 1;
+    subpassDescription.pColorAttachments = &colorReference;
+
+    // Use subpass dependencies for layout transitions
+    std::array<VkSubpassDependency, 2> dependencies;
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    // Renderpass
+    VkRenderPassCreateInfo renderPassCI = Vk::Initializers::RenderPassCreateInfo();
+    renderPassCI.attachmentCount = 1;
+    renderPassCI.pAttachments = &attDesc;
+    renderPassCI.subpassCount = 1;
+    renderPassCI.pSubpasses = &subpassDescription;
+    renderPassCI.dependencyCount = 2;
+    renderPassCI.pDependencies = dependencies.data();
+    VkRenderPass renderpass;
+    VK_CHECK_RESULT(vkCreateRenderPass(vkDevice->logicalDevice, &renderPassCI, nullptr, &renderpass));
+
+    struct {
+        VkImage image;
+        VkImageView view;
+        VkDeviceMemory memory;
+        VkFramebuffer framebuffer;
+    } offscreen;
+
+    // Offfscreen framebuffer
+    {
+        // Color attachment
+        VkImageCreateInfo imageCreateInfo = Vk::Initializers::ImageCreateInfo();
+        imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.format = format;
+        imageCreateInfo.extent.width = dim;
+        imageCreateInfo.extent.height = dim;
+        imageCreateInfo.extent.depth = 1;
+        imageCreateInfo.mipLevels = 1;
+        imageCreateInfo.arrayLayers = 1;
+        imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        imageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &imageCreateInfo, nullptr, &offscreen.image));
+
+        VkMemoryAllocateInfo memAlloc = Vk::Initializers::MemoryAllocateInfo();
+        VkMemoryRequirements memReqs;
+        vkGetImageMemoryRequirements(vkDevice->logicalDevice, offscreen.image, &memReqs);
+        memAlloc.allocationSize = memReqs.size;
+        memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAlloc, nullptr, &offscreen.memory));
+        VK_CHECK_RESULT(vkBindImageMemory(vkDevice->logicalDevice, offscreen.image, offscreen.memory, 0));
+
+        VkImageViewCreateInfo colorImageView = Vk::Initializers::ImageViewCreateInfo();
+        colorImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        colorImageView.format = format;
+        colorImageView.flags = 0;
+        colorImageView.subresourceRange = {};
+        colorImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        colorImageView.subresourceRange.baseMipLevel = 0;
+        colorImageView.subresourceRange.levelCount = 1;
+        colorImageView.subresourceRange.baseArrayLayer = 0;
+        colorImageView.subresourceRange.layerCount = 1;
+        colorImageView.image = offscreen.image;
+        VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &colorImageView, nullptr, &offscreen.view));
+
+        VkFramebufferCreateInfo fbufCreateInfo = Vk::Initializers::FramebufferCreateInfo();
+        fbufCreateInfo.renderPass = renderpass;
+        fbufCreateInfo.attachmentCount = 1;
+        fbufCreateInfo.pAttachments = &offscreen.view;
+        fbufCreateInfo.width = dim;
+        fbufCreateInfo.height = dim;
+        fbufCreateInfo.layers = 1;
+        VK_CHECK_RESULT(vkCreateFramebuffer(vkDevice->logicalDevice, &fbufCreateInfo, nullptr, &offscreen.framebuffer));
+
+        VkCommandBuffer layoutCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+        Vk::Utils::SetImageLayout(
+            layoutCmd,
+            offscreen.image,
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        vkDevice->FlushCommandBuffer(layoutCmd, queue, true);
+    }
+
+    // Descriptors
+    VkDescriptorSetLayout descriptorsetlayout;
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+        Vk::Initializers::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),
+    };
+    VkDescriptorSetLayoutCreateInfo descriptorsetlayoutCI = Vk::Initializers::DescriptorSetLayoutCreateInfo(setLayoutBindings);
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorsetlayoutCI, nullptr, &descriptorsetlayout));
+
+    // Descriptor Pool
+    std::vector<VkDescriptorPoolSize> poolSizes = { Vk::Initializers::DescriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1) };
+    VkDescriptorPoolCreateInfo descriptorPoolCI = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, 2);
+    VkDescriptorPool descriptorpool;
+    VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolCI, nullptr, &descriptorpool));
+
+    // Descriptor sets
+    VkDescriptorSet descriptorset;
+    VkDescriptorSetAllocateInfo allocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorpool, &descriptorsetlayout, 1);
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &allocInfo, &descriptorset));
+    VkWriteDescriptorSet writeDescriptorSet = Vk::Initializers::WriteDescriptorSet(descriptorset, 
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &testSkybox->GetTexture2D()->descriptor);
+    vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
+
+    // Pipeline layout
+    struct PushBlock {
+        glm::mat4 mvp;
+    } pushBlock;
+
+    VkPipelineLayout pipelinelayout;
+    std::vector<VkPushConstantRange> pushConstantRanges = {
+        Vk::Initializers::PushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PushBlock), 0),
+    };
+    VkPipelineLayoutCreateInfo pipelineLayoutCI = Vk::Initializers::PipelineLayoutCreateInfo(&descriptorsetlayout, 1);
+    pipelineLayoutCI.pushConstantRangeCount = 1;
+    pipelineLayoutCI.pPushConstantRanges = pushConstantRanges.data();
+    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCI, nullptr, &pipelinelayout));
+
+    // Pipeline
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = Vk::Initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
+    VkPipelineRasterizationStateCreateInfo rasterizationState = Vk::Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    VkPipelineColorBlendAttachmentState blendAttachmentState = Vk::Initializers::PipelineColorBlendAttachmentState(0xf, VK_FALSE);
+    VkPipelineColorBlendStateCreateInfo colorBlendState = Vk::Initializers::PipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
+    VkPipelineDepthStencilStateCreateInfo depthStencilState = Vk::Initializers::PipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
+    VkPipelineViewportStateCreateInfo viewportState = Vk::Initializers::PipelineViewportStateCreateInfo(1, 1);
+    VkPipelineMultisampleStateCreateInfo multisampleState = Vk::Initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
+    std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    VkPipelineDynamicStateCreateInfo dynamicState = Vk::Initializers::PipelineDynamicStateCreateInfo(dynamicStateEnables);
+
+    Vk::VertexLayout vertexLayout =
+    {
+        {
+            Vk::eComponent::kPosition,
+            Vk::eComponent::kNormal,
+            Vk::eComponent::kUv,
+        }
+    };
+
+    // Vertex input state
+    VkVertexInputBindingDescription vertexInputBinding = Vk::Initializers::VertexInputBindingDescription(0, vertexLayout.Stride(), VK_VERTEX_INPUT_RATE_VERTEX);
+    VkVertexInputAttributeDescription vertexInputAttribute = Vk::Initializers::VertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0);
+
+    VkPipelineVertexInputStateCreateInfo vertexInputState = Vk::Initializers::PipelineVertexInputStateCreateInfo();
+    vertexInputState.vertexBindingDescriptionCount = 1;
+    vertexInputState.pVertexBindingDescriptions = &vertexInputBinding;
+    vertexInputState.vertexAttributeDescriptionCount = 1;
+    vertexInputState.pVertexAttributeDescriptions = &vertexInputAttribute;
+
+    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
+
+    VkGraphicsPipelineCreateInfo pipelineCI = Vk::Initializers::PipelineCreateInfo(pipelinelayout, renderpass);
+    pipelineCI.pInputAssemblyState = &inputAssemblyState;
+    pipelineCI.pRasterizationState = &rasterizationState;
+    pipelineCI.pColorBlendState = &colorBlendState;
+    pipelineCI.pMultisampleState = &multisampleState;
+    pipelineCI.pViewportState = &viewportState;
+    pipelineCI.pDepthStencilState = &depthStencilState;
+    pipelineCI.pDynamicState = &dynamicState;
+    pipelineCI.stageCount = 2;
+    pipelineCI.pStages = shaderStages.data();
+    pipelineCI.pVertexInputState = &vertexInputState;
+    pipelineCI.renderPass = renderpass;
+
+    shaderStages[0] = LoadShader(GetAssetPath() + "shaders/compiled/filter.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    shaderStages[1] = LoadShader(GetAssetPath() + "shaders/compiled/irradianceFilter.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    VkPipeline pipeline;
+    VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
+
+    // Render
+    VkClearValue clearValues[1];
+    clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 0.0f } };
+
+    VkRenderPassBeginInfo renderPassBeginInfo = Vk::Initializers::RenderPassBeginInfo();
+    // Reuse render pass from example pass
+    renderPassBeginInfo.renderPass = renderpass;
+    renderPassBeginInfo.framebuffer = offscreen.framebuffer;
+    renderPassBeginInfo.renderArea.extent.width = dim;
+    renderPassBeginInfo.renderArea.extent.height = dim;
+    renderPassBeginInfo.clearValueCount = 1;
+    renderPassBeginInfo.pClearValues = clearValues;
+
+    std::vector<glm::mat4> matrices = {
+        // POSITIVE_X
+        glm::rotate(glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        // NEGATIVE_X
+        glm::rotate(glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        // POSITIVE_Y
+        glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        // NEGATIVE_Y
+        glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        // POSITIVE_Z
+        glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
+        // NEGATIVE_Z
+        glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+    };
+
+    VkCommandBuffer cmdBuf = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+    VkViewport viewport = Vk::Initializers::Viewport((float)dim, (float)dim, 0.0f, 1.0f);
+    VkRect2D scissor = Vk::Initializers::Rect2D(dim, dim, 0, 0);
+
+    vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+    vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+
+    VkImageSubresourceRange subresourceRange = {};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = numMips;
+    subresourceRange.layerCount = 6;
+
+    // Change image layout for all cubemap faces to transfer destination
+    Vk::Utils::SetImageLayout(
+        cmdBuf,
+        textures.irradianceCube.image,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        subresourceRange);
+
+    for (uint32_t m = 0; m < numMips; ++m) {
+        for (uint32_t f = 0; f < 6; ++f) {
+            viewport.width = static_cast<float>(dim * std::pow(0.5f, m));
+            viewport.height = static_cast<float>(dim * std::pow(0.5f, m));
+            vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
+
+            // Render scene from cube face's point of view
+            vkCmdBeginRenderPass(cmdBuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            // Update shader push constant block
+            pushBlock.mvp = glm::perspective((float)(M_PI / 2.0), 1.0f, 0.1f, 512.0f) * matrices[f];
+
+            vkCmdPushConstants(cmdBuf, pipelinelayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushBlock), &pushBlock);
+
+            vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+            vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
+
+            VkDeviceSize offsets[1] = { 0 };
+
+            vkCmdBindVertexBuffers(cmdBuf, 0, 1, &testSkybox->vertices.buffer, offsets);
+            vkCmdDraw(cmdBuf, testSkybox->vertexCount, 1, 0, 0);
+
+            vkCmdEndRenderPass(cmdBuf);
+
+            Vk::Utils::SetImageLayout(
+                cmdBuf,
+                offscreen.image,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+            // Copy region for transfer from framebuffer to cube face
+            VkImageCopy copyRegion = {};
+
+            copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.srcSubresource.baseArrayLayer = 0;
+            copyRegion.srcSubresource.mipLevel = 0;
+            copyRegion.srcSubresource.layerCount = 1;
+            copyRegion.srcOffset = { 0, 0, 0 };
+
+            copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.dstSubresource.baseArrayLayer = f;
+            copyRegion.dstSubresource.mipLevel = m;
+            copyRegion.dstSubresource.layerCount = 1;
+            copyRegion.dstOffset = { 0, 0, 0 };
+
+            copyRegion.extent.width = static_cast<uint32_t>(viewport.width);
+            copyRegion.extent.height = static_cast<uint32_t>(viewport.height);
+            copyRegion.extent.depth = 1;
+
+            vkCmdCopyImage(
+                cmdBuf,
+                offscreen.image,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                textures.irradianceCube.image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1,
+                &copyRegion);
+
+            // Transform framebuffer color attachment back 
+            Vk::Utils::SetImageLayout(
+                cmdBuf,
+                offscreen.image,
+                VK_IMAGE_ASPECT_COLOR_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+        }
+    }
+
+    Vk::Utils::SetImageLayout(
+        cmdBuf,
+        textures.irradianceCube.image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        subresourceRange);
+
+    vkDevice->FlushCommandBuffer(cmdBuf, queue);
+
+    // todo: cleanup
+    vkDestroyRenderPass(vkDevice->logicalDevice, renderpass, nullptr);
+    vkDestroyFramebuffer(vkDevice->logicalDevice, offscreen.framebuffer, nullptr);
+    vkFreeMemory(vkDevice->logicalDevice, offscreen.memory, nullptr);
+    vkDestroyImageView(vkDevice->logicalDevice, offscreen.view, nullptr);
+    vkDestroyImage(vkDevice->logicalDevice, offscreen.image, nullptr);
+    vkDestroyDescriptorPool(vkDevice->logicalDevice, descriptorpool, nullptr);
+    vkDestroyDescriptorSetLayout(vkDevice->logicalDevice, descriptorsetlayout, nullptr);
+    vkDestroyPipeline(vkDevice->logicalDevice, pipeline, nullptr);
+    vkDestroyPipelineLayout(vkDevice->logicalDevice, pipelinelayout, nullptr);
+
+    auto tEnd = std::chrono::high_resolution_clock::now();
+    auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
+    std::cout << "Generating irradiance cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
 }

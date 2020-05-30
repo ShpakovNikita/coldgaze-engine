@@ -886,6 +886,7 @@ void CG::Engine::PollEvents(float deltaTime)
 
     while (SDL_PollEvent(&event))
     {
+		CaptureEvent(event);
 		HandleSystemInput(event);
 
 		for (auto& system : systems)

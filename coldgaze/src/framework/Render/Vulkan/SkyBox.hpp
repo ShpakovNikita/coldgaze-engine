@@ -32,6 +32,11 @@ namespace CG
 
             void SetupDescriptorSet(VkDescriptorPool descriptorPool);
 
+            Texture2D* GetTexture2D() const;
+
+            uint32_t vertexCount;
+            Buffer vertices;
+
         private:
             struct Vertex
             {
@@ -62,9 +67,7 @@ namespace CG
             VkPipeline pipeline;
             VkPipelineLayout pipelineLayout;
 
-            Buffer vertices;
             Buffer ubo;
-            uint32_t vertexCount;
             Engine& engine;
 
             std::unique_ptr<Texture2D> sphericalSkyboxTexture;

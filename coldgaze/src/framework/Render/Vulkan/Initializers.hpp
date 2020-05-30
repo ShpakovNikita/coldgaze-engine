@@ -16,6 +16,13 @@ namespace CG
                 return renderPassCreateInfo;
 			}
 
+            inline VkFramebufferCreateInfo FramebufferCreateInfo()
+            {
+                VkFramebufferCreateInfo framebufferCreateInfo{};
+                framebufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+                return framebufferCreateInfo;
+            }
+
 			inline VkImageViewCreateInfo ImageViewCreateInfo()
 			{
 				VkImageViewCreateInfo imageViewCreateInfo{};
@@ -358,6 +365,13 @@ namespace CG
 				return pipelineCreateInfo;
 			}
 
+            inline VkRenderPassBeginInfo RenderPassBeginInfo()
+            {
+                VkRenderPassBeginInfo renderPassBeginInfo{};
+                renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                return renderPassBeginInfo;
+            }
+
 			inline VkVertexInputBindingDescription VertexInputBindingDescription(
 				uint32_t binding,
 				uint32_t stride,
@@ -404,6 +418,20 @@ namespace CG
 				viewport.maxDepth = maxDepth;
 				return viewport;
 			}
+
+            inline VkRect2D Rect2D(
+                int32_t width,
+                int32_t height,
+                int32_t offsetX,
+                int32_t offsetY)
+            {
+                VkRect2D rect2D{};
+                rect2D.extent.width = width;
+                rect2D.extent.height = height;
+                rect2D.offset.x = offsetX;
+                rect2D.offset.y = offsetY;
+                return rect2D;
+            }
 
 			inline VkPhysicalDeviceRayTracingPropertiesNV PhysicalDeviceRayTracingPropertiesNV()
 			{

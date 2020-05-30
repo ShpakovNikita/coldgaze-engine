@@ -7,6 +7,7 @@
 #include <chrono>
 #include <memory>
 #include "Render/Vulkan/Buffer.hpp"
+#include "SDL2/SDL_events.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -68,6 +69,8 @@ namespace CG
 		virtual void Cleanup();
 
 		virtual void BuildCommandBuffers();
+
+		virtual void CaptureEvent(const SDL_Event&) {};
 
 		// Frame utils
 		void PrepareFrame();
