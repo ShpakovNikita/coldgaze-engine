@@ -12,10 +12,10 @@ void CG::Vk::Texture2D::FromBuffer(
 	uint32_t texHeight,
 	Device* device,
 	VkQueue copyQueue,
-	VkFilter filter /*= VK_FILTER_LINEAR*/,
 	VkImageUsageFlags imageUsageFlags /*= VK_IMAGE_USAGE_SAMPLED_BIT*/,
 	VkImageLayout aImageLayout /*= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL*/,
-	VkImageTiling imageTiling /*= VK_IMAGE_TILING_OPTIMAL*/)
+	VkImageTiling imageTiling /*= VK_IMAGE_TILING_OPTIMAL*/,
+	TextureSampler textureSampler /*= {}*/)
 {
 	vkDevice = device;
 	width = texWidth;
@@ -119,12 +119,12 @@ void CG::Vk::Texture2D::FromBuffer(
 
 	VkSamplerCreateInfo samplerCreateInfo = {};
 	samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerCreateInfo.magFilter = filter;
-	samplerCreateInfo.minFilter = filter;
+	samplerCreateInfo.magFilter = textureSampler.magFilter;
+	samplerCreateInfo.minFilter = textureSampler.minFilter;
 	samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerCreateInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerCreateInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerCreateInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerCreateInfo.addressModeU = textureSampler.addressModeU;
+	samplerCreateInfo.addressModeV = textureSampler.addressModeV;
+	samplerCreateInfo.addressModeW = textureSampler.addressModeW;
 	samplerCreateInfo.mipLodBias = 0.0f;
 	samplerCreateInfo.compareOp = VK_COMPARE_OP_NEVER;
 	samplerCreateInfo.minLod = 0.0f;

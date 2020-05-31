@@ -1,10 +1,7 @@
 #include "Render/Vulkan/Texture.hpp"
 #include "Render/Vulkan/Device.hpp"
 
-CG::Vk::Texture::~Texture()
-{
-    Destroy();
-}
+CG::Vk::Texture::~Texture() = default;
 
 void CG::Vk::Texture::UpdateDescriptor()
 {

@@ -37,9 +37,12 @@ void CG::Vk::SkyBox::LoadFromFile(const std::string& fileName, Device* device, V
 
         uint32_t imageSize = width * height * 3 * sizeof(float);
 
+        TextureSampler sampler;
+        sampler.magFilter = VK_FILTER_LINEAR;
+        sampler.minFilter = VK_FILTER_LINEAR;
         sphericalSkyboxTexture->FromBuffer(data, imageSize, VK_FORMAT_R32G32B32_SFLOAT, width, height, device,
-            copyQueue, VK_FILTER_LINEAR, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            VK_IMAGE_TILING_LINEAR);
+            copyQueue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            VK_IMAGE_TILING_LINEAR, sampler);
 
         stbi_image_free(data);
 

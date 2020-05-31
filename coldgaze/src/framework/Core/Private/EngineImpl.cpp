@@ -149,8 +149,6 @@ void CG::EngineImpl::PreparePipelines()
 	const std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
 		Vk::Initializers::VertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, pos)),	// Location 0: Position	
 		Vk::Initializers::VertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, normal)),// Location 1: Normal
-		Vk::Initializers::VertexInputAttributeDescription(0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, uv)),	// Location 2: Texture coordinates
-		Vk::Initializers::VertexInputAttributeDescription(0, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, color)),	// Location 3: Color
 	};
 
 	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = Vk::Initializers::PipelineVertexInputStateCreateInfo();
@@ -160,8 +158,8 @@ void CG::EngineImpl::PreparePipelines()
 	vertexInputStateCreateInfo.pVertexAttributeDescriptions = vertexInputAttributes.data();
 
 	const std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
-		LoadShader(GetAssetPath() + "shaders/compiled/mesh.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-		LoadShader(GetAssetPath() + "shaders/compiled/mesh.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+		LoadShader(GetAssetPath() + "shaders/compiled/glTF_PBR.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+		LoadShader(GetAssetPath() + "shaders/compiled/glTF_PBR.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 
 	VkGraphicsPipelineCreateInfo pipelineCreateInfo = Vk::Initializers::PipelineCreateInfo(pipelineLayout, renderPass, 0);
@@ -326,6 +324,7 @@ void CG::EngineImpl::SetupDescriptors()
 
 void CG::EngineImpl::BindModelMaterials()
 {
+    /*
     // TODO: optimize storage in images
     std::vector<Vk::GLTFModel::Image>& images = testScene->GetImages();
     const std::vector<Vk::GLTFModel::Texture>& sceneTextures = testScene->GetTextures();
@@ -349,6 +348,7 @@ void CG::EngineImpl::BindModelMaterials()
 
         vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(texturesWriteDescriptorSets.size()), texturesWriteDescriptorSets.data(), 0, nullptr);
     }
+    */
 }
 
 void CG::EngineImpl::UnbindModelMaterials()
