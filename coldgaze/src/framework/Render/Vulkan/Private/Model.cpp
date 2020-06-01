@@ -184,6 +184,16 @@ const std::vector<CG::Vk::GLTFModel::Texture>& CG::Vk::GLTFModel::GetTextures() 
 	return textures;
 }
 
+const std::vector<std::unique_ptr<CG::Vk::GLTFModel::Node>>& CG::Vk::GLTFModel::GetNodes() const
+{
+    return nodes;
+}
+
+const std::vector<CG::Vk::GLTFModel::Node*>& CG::Vk::GLTFModel::GetFlatNodes() const
+{
+    return allNodes;
+}
+
 void CG::Vk::GLTFModel::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 {
 	VkDeviceSize offsets[1] = { 0 };
@@ -258,13 +268,13 @@ void CG::Vk::GLTFModel::LoadTextureSamplers(const tinygltf::Model& input)
         sampler.addressModeU = GetVkWrapMode(smpl.wrapS);
         sampler.addressModeV = GetVkWrapMode(smpl.wrapT);
         sampler.addressModeW = sampler.addressModeV;
-        textureSamplers.push_back(std::move(sampler));
+        textureSamplers.push_back(sampler);
     }
 }
 
 void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)
 {
-    textures.resize(input.textures.size());
+    textures.reserve(input.textures.size());
 
     for (const tinygltf::Texture& tex : input.textures) {
         const tinygltf::Image& image = input.images[tex.source];
@@ -283,7 +293,7 @@ void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)
         }
         Texture texture;
         texture.FromGLTFImage(image, textureSampler, vkDevice, queue);
-        textures.push_back(std::move(texture));
+        textures.push_back(texture);
     }
 }
 
@@ -338,10 +348,10 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
             material.emissiveFactor = glm::vec4(0.0f);
         }
 
-        materials.push_back(std::move(material));
+        materials.push_back(material);
     }
     // Push a default material at the end of the list for meshes with no material assigned
-    materials.push_back(std::move(Material()));
+    materials.push_back(Material());
 }
 
 void CG::Vk::GLTFModel::LoadAnimations(const tinygltf::Model& input)
@@ -420,7 +430,7 @@ void CG::Vk::GLTFModel::LoadAnimations(const tinygltf::Model& input)
                 }
             }
 
-            animation.samplers.push_back(std::move(sampler));
+            animation.samplers.push_back(sampler);
         }
 
         // Channels
@@ -446,10 +456,10 @@ void CG::Vk::GLTFModel::LoadAnimations(const tinygltf::Model& input)
                 continue;
             }
 
-            animation.channels.push_back(std::move(channel));
+            animation.channels.push_back(channel);
         }
 
-        animations.push_back(std::move(animation));
+        animations.push_back(animation);
     }
 }
 
@@ -610,7 +620,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
                     if (glm::length(vert.weight0) == 0.0f) {
                         vert.weight0 = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
                     }
-                    vertexBuffer.push_back(std::move(vert));
+                    vertexBuffer.push_back(vert);
                 }
             }
             // Indices
@@ -681,6 +691,7 @@ CG::Vk::GLTFModel::Mesh::Mesh(Device* vkDevice, const glm::mat4& meshMat)
 
     uniformBuffer.buffer.Map(sizeof(uniformBlock));
     uniformBuffer.buffer.SetupDescriptor(sizeof(uniformBlock));
+    UpdateUniformBuffers();
 }
 
 void CG::Vk::GLTFModel::Mesh::UpdateUniformBuffers()

@@ -3,6 +3,32 @@
 #include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Debug.hpp"
 #include "Render/Vulkan/Utils.hpp"
+#include "stb_image.h"
+#include "Render/Vulkan/Exceptions.hpp"
+
+void CG::Vk::Texture2D::LoadFromFile(const std::string& fileName, Device* device, VkQueue copyQueue)
+{
+    vkDevice = device;
+
+    int imageWidth, imageHeight, nrComponents;
+    unsigned char* data = stbi_load(fileName.c_str(), &imageWidth, &imageHeight, &nrComponents, 0);
+
+    if (data)
+    {
+        width = static_cast<uint32_t>(imageWidth);
+        height = static_cast<uint32_t>(imageHeight);
+
+        uint32_t imageSize = width * height * 4 * sizeof(unsigned char);
+
+        FromBuffer(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, width, height, device, copyQueue);
+
+        stbi_image_free(data);
+    }
+    else
+    {
+        throw AssetLoadingException("Failed to load image! Make sure that it has RGBE or RGB format!");
+    }
+}
 
 void CG::Vk::Texture2D::FromBuffer(
 	const void* buffer,
@@ -121,10 +147,10 @@ void CG::Vk::Texture2D::FromBuffer(
 	samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
 	samplerCreateInfo.magFilter = textureSampler.magFilter;
 	samplerCreateInfo.minFilter = textureSampler.minFilter;
-	samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerCreateInfo.addressModeU = textureSampler.addressModeU;
-	samplerCreateInfo.addressModeV = textureSampler.addressModeV;
-	samplerCreateInfo.addressModeW = textureSampler.addressModeW;
+    samplerCreateInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerCreateInfo.addressModeU = textureSampler.addressModeU;
+    samplerCreateInfo.addressModeV = textureSampler.addressModeV;
+    samplerCreateInfo.addressModeW = textureSampler.addressModeW;
 	samplerCreateInfo.mipLodBias = 0.0f;
 	samplerCreateInfo.compareOp = VK_COMPARE_OP_NEVER;
 	samplerCreateInfo.minLod = 0.0f;

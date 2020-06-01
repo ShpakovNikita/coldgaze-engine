@@ -2,6 +2,7 @@
 
 #include "vulkan/vulkan_core.h"
 #include "Texture.hpp"
+#include <string>
 
 
 namespace CG
@@ -23,6 +24,8 @@ namespace CG
 			public Texture
 		{
 		public:
+			void LoadFromFile(const std::string& fileName, Device* device, VkQueue copyQueue);
+
 			void FromBuffer(
 				const void* buffer,
 				VkDeviceSize bufferSize,

@@ -52,31 +52,65 @@ namespace CG
 
 		} uiData = {};
 
-		struct ShaderUniformData
-		{
-			glm::mat4 projection;
-			glm::mat4 view;
+        struct ShaderUniformData
+        {
+            glm::mat4 projection;
+            glm::mat4 view;
             std::array<glm::vec4, 6> lightPosPushConstants;
             std::array<glm::vec4, 6> lightColorPushConstants;
-		} uboData = {};
+        } uboData = {};
+
+        struct SceneShaderUniformData
+        {
+            glm::mat4 projection;
+            glm::mat4 model;
+            glm::mat4 view;
+
+            std::array<glm::vec4, 6> lightPosPushConstants;
+            std::array<glm::vec4, 6> lightColorPushConstants;
+        } sceneUboData = {};
 
 		Vk::Buffer ubo;
+		Vk::Buffer sceneUbo;
 
 		struct DescriptorSetLayouts {
-			VkDescriptorSetLayout matrices;
-			VkDescriptorSetLayout textures;
+			VkDescriptorSetLayout scene;
+			VkDescriptorSetLayout material;
+			VkDescriptorSetLayout node;
 		} descriptorSetLayouts = {};
+
+        struct DescriptorSets {
+            VkDescriptorSet scene;
+        } descriptorSets = {};
 
 		struct RenderPipelines
 		{
 			VkPipeline wireframe;
 			VkPipeline solidPBR_MSAA;
+			VkPipeline solidPBR_MSAA_AlphaBlend;
 		} pipelines = {};
 
 		struct Textures
 		{
 			Vk::Texture irradianceCube;
 		} textures = {};
+
+        struct PushConstBlockMaterial {
+            glm::vec4 baseColorFactor;
+            glm::vec4 emissiveFactor;
+            glm::vec4 diffuseFactor;
+            glm::vec4 specularFactor;
+            float workflow;
+            int colorTextureSet;
+            int physicalDescriptorTextureSet;
+            int normalTextureSet;
+            int occlusionTextureSet;
+            int emissiveTextureSet;
+            float metallicFactor;
+            float roughnessFactor;
+            float alphaMask;
+            float alphaMaskCutoff;
+        };
 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
 
@@ -101,14 +135,18 @@ namespace CG
 
 		void LoadSkybox(const std::string& cubeMapFilePath);
 
+		void RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk::GLTFModel::Material::eAlphaMode alphaMode);
+		void SetupNodeDescriptorSet(Vk::GLTFModel::Node* node);
+
 		void GenerateIrradianceSampler();
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
 		VkPipelineLayout pipelineLayout = {};
-		VkDescriptorSetLayout descriptorSetLayout = {};
 		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+
+		Vk::Texture2D emptyTexture;
 
 		std::unique_ptr<Vk::GLTFModel> testScene;
 		std::unique_ptr<Vk::SkyBox> testSkybox;

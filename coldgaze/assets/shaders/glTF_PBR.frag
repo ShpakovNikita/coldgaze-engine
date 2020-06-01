@@ -10,8 +10,6 @@ layout (location = 0) in vec3 inWorldPos;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec2 inUV0;
 layout (location = 3) in vec2 inUV1;
-layout (location = 4) in vec3 inLightPosVec[LIGHTS_COUNT];
-layout (location = 10) in vec3 inLightColorVec[LIGHTS_COUNT];
 
 // Scene bindings
 
@@ -228,4 +226,6 @@ void main()
     {
         outFragColor = vec4(0.0f, 0.0f, 1.0f, 1.0f);
     }
+    
+    outFragColor = albedo;
 }

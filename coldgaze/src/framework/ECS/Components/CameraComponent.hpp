@@ -45,8 +45,8 @@ struct CameraComponent
 	float zoom = 1.0f;
 
 	// glm::vec3 rotation = glm::vec3(0.0f, 90.0f, 0.0f);
-	glm::vec3 rotation = glm::vec3(180.0f, 0.0f, 0.0f);
-	glm::vec3 position = glm::vec3(0.0f, 0.0f, zoom);
+	glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
+	glm::vec3 position = glm::vec3(0.0f, 0.0f, -zoom);
 
 	// TODO: remove device and memory
 	CG::Vk::Device* vkDevice;

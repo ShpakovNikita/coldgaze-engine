@@ -68,7 +68,7 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 	{
 		if (handled)
 		{
-			UpdateMousePos(component, event.motion.x, event.motion.y);
+			UpdateMousePos(component, -event.motion.x, event.motion.y);
 		}
 	}
 	break;
@@ -81,10 +81,10 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			{
 			case SDL_BUTTON_LEFT:
 				component.input.leftMouse = true;
-				UpdateMousePos(component, event.button.x, event.button.y);
+				UpdateMousePos(component, -event.button.x, event.button.y);
             case SDL_BUTTON_RIGHT:
                 component.input.rightMouse = true;
-                UpdateMousePos(component, event.button.x, event.button.y);
+                UpdateMousePos(component, -event.button.x, event.button.y);
 			default:
 				break;
 			}
@@ -100,10 +100,10 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			{
 			case SDL_BUTTON_LEFT:
 				component.input.leftMouse = false;
-				UpdateMousePos(component, event.button.x, event.button.y);
+				UpdateMousePos(component, -event.button.x, event.button.y);
             case SDL_BUTTON_RIGHT:
                 component.input.rightMouse = false;
-                UpdateMousePos(component, event.button.x, event.button.y);
+                UpdateMousePos(component, -event.button.x, event.button.y);
 			default:
 				break;
 			}
@@ -188,9 +188,9 @@ void CameraSystem::UpdateCameraFirstPerson(CameraComponent& cameraComponent, flo
         if (cameraComponent.input.down)
             cameraComponent.position -= camForwardVector * moveSpeed;
         if (cameraComponent.input.left)
-            cameraComponent.position += glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
-        if (cameraComponent.input.right)
             cameraComponent.position -= glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
+        if (cameraComponent.input.right)
+            cameraComponent.position += glm::normalize(glm::cross(camForwardVector, glm::vec3(0.0f, 1.0f, 0.0f))) * moveSpeed;
     }
 }
 

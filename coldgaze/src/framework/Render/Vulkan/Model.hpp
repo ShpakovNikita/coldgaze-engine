@@ -40,6 +40,7 @@ namespace CG
 		class GLTFModel
 		{
 		public:
+			// TODO: animations update
             // The vertex layout for the model
             struct Vertex
             {
@@ -208,6 +209,8 @@ namespace CG
 
 			std::vector<Material>& GetMaterials();
 			const std::vector<Texture>& GetTextures() const;
+			const std::vector<std::unique_ptr<Node>>& GetNodes() const;
+			const std::vector<Node*>& GetFlatNodes() const;
 
 			void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
 			void DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const Node& node);
