@@ -21,12 +21,8 @@ void CG::Vk::SkyBox::LoadFromFile(const std::string& fileName, Device* device, V
     vkDevice = device;
     queue = copyQueue;
 
-    stbi_set_flip_vertically_on_load(true);
-
     int imageWidth, imageHeight, nrComponents;
     float* data = stbi_loadf(fileName.c_str(), &imageWidth, &imageHeight, &nrComponents, 0);
-
-    stbi_set_flip_vertically_on_load(false);
 
     if (data)
     {
@@ -40,6 +36,10 @@ void CG::Vk::SkyBox::LoadFromFile(const std::string& fileName, Device* device, V
         TextureSampler sampler;
         sampler.magFilter = VK_FILTER_LINEAR;
         sampler.minFilter = VK_FILTER_LINEAR;
+        sampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
         sphericalSkyboxTexture->FromBuffer(data, imageSize, VK_FORMAT_R32G32B32_SFLOAT, width, height, device,
             copyQueue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_IMAGE_TILING_LINEAR, sampler);

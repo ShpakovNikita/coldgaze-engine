@@ -15,6 +15,7 @@
 #include "Render/Vulkan/Debug.hpp"
 #include <mutex>
 #include "Render/Vulkan/Exceptions.hpp"
+#include "glm/common.hpp"
 
 namespace SGLTFModel
 {
@@ -109,6 +110,8 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*
                 node->UpdateRecursive();
             }
         }
+
+        CalculateSize();
 	}
 	else {
 		throw AssetLoadingException("Could not open the glTF file. Check, if it is correct");
@@ -219,6 +222,11 @@ bool CG::Vk::GLTFModel::IsLoaded() const
 void CG::Vk::GLTFModel::SetLoaded(bool aLoaded)
 {
 	loaded = aLoaded;
+}
+
+const glm::vec3& CG::Vk::GLTFModel::GetSize() const
+{
+    return size;
 }
 
 // from GLTF2 specs
@@ -495,6 +503,24 @@ void CG::Vk::GLTFModel::LoadSkins(const tinygltf::Model& input)
     }
 }
 
+void CG::Vk::GLTFModel::CalculateSize()
+{
+    AABBox dimension;
+
+    dimension.min = glm::vec3(FLT_MAX);
+    dimension.max = glm::vec3(-FLT_MAX);
+
+    for (const auto& node : allNodes) {
+        if (node->mesh && node->mesh->bbox.valid) {
+            AABBox bbox = node->mesh->bbox.GetAABB(node->GetWorldMatrix());
+            dimension.min = glm::min(dimension.min, bbox.min);
+            dimension.max = glm::max(dimension.max, bbox.max);
+        }
+    }
+
+    size = glm::vec3(dimension.max[0] - dimension.min[0], dimension.max[1] - dimension.min[1], dimension.max[2] - dimension.min[2]);
+}
+
 void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, 
     const tinygltf::Model& input, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
 {
@@ -544,6 +570,10 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
             uint32_t vertexCount = 0;
             bool hasSkin = false;
             bool hasIndices = primitive.indices > -1;
+
+            glm::vec3 posMin{};
+            glm::vec3 posMax{};
+
             // Vertices
             {
                 const float* bufferPos = nullptr;
@@ -568,6 +598,9 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
                 bufferPos = reinterpret_cast<const float*>(&(input.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
                 vertexCount = static_cast<uint32_t>(posAccessor.count);
                 posByteStride = posAccessor.ByteStride(posView) ? (posAccessor.ByteStride(posView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
+
+                posMin = glm::vec3(posAccessor.minValues[0], posAccessor.minValues[1], posAccessor.minValues[2]);
+                posMax = glm::vec3(posAccessor.maxValues[0], posAccessor.maxValues[1], posAccessor.maxValues[2]);
 
                 // TODO: refactor after working scene establishing
                 if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
@@ -664,9 +697,19 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
             // loading last material as default one
             std::unique_ptr<Primitive> newPrimitive = std::make_unique<Primitive>(indexStart, indexCount, vertexCount, 
                 primitive.material > -1 ? materials[primitive.material] : materials.back());
+            newPrimitive->bbox = AABBox(posMin, posMax);
             newMesh->primitives.push_back(std::move(newPrimitive));
         }
 
+        // Mesh BB from BBs of primitives
+        for (const auto& p : newMesh->primitives) {
+            if (p->bbox.valid && !newMesh->bbox.valid) {
+                newMesh->bbox = p->bbox;
+                newMesh->bbox.valid = true;
+            }
+            newMesh->bbox.min = glm::min(newMesh->bbox.min, p->bbox.min);
+            newMesh->bbox.max = glm::max(newMesh->bbox.max, p->bbox.max);
+        }
         newNode->mesh = std::move(newMesh);
     }
     if (parent) {
@@ -776,4 +819,31 @@ void CG::Vk::GLTFModel::Texture::FromGLTFImage(const tinygltf::Image& glTFImage,
             device, copyQueue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_IMAGE_TILING_OPTIMAL, textureSampler);
     }
+}
+
+CG::Vk::GLTFModel::AABBox CG::Vk::GLTFModel::AABBox::GetAABB(const glm::mat4& m)
+{
+    glm::vec3 locMin = glm::vec3(m[3]);
+    glm::vec3 locaMax = locMin;
+    glm::vec3 v0, v1;
+
+    glm::vec3 right = glm::vec3(m[0]);
+    v0 = right * this->min.x;
+    v1 = right * this->max.x;
+    locMin += glm::min(v0, v1);
+    locaMax += glm::max(v0, v1);
+
+    glm::vec3 up = glm::vec3(m[1]);
+    v0 = up * this->min.y;
+    v1 = up * this->max.y;
+    locMin += glm::min(v0, v1);
+    locaMax += glm::max(v0, v1);
+
+    glm::vec3 back = glm::vec3(m[2]);
+    v0 = back * this->min.z;
+    v1 = back * this->max.z;
+    locMin += glm::min(v0, v1);
+    locaMax += glm::max(v0, v1);
+
+    return AABBox(locMin, locaMax);
 }

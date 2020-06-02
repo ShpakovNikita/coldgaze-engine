@@ -25,6 +25,7 @@
 #include "Render\Vulkan\Texture.hpp"
 #include "Render\Vulkan\Utils.hpp"
 #include "Render\Vulkan\LayoutDescriptor.hpp"
+#include <algorithm>
 
 using namespace CG;
 
@@ -70,15 +71,17 @@ void CG::EngineImpl::Prepare()
 
 	SetupSystems();
 
-	PrepareUniformBuffers();
+    PrepareUniformBuffers();
 
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice, queue);
 
-    // LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
+    LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
     LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
 	PreparePipelines();
 	BuildCommandBuffers();
+
+    UpdateUniformBuffers();
 }
 
 void CG::EngineImpl::Cleanup()
@@ -137,7 +140,7 @@ void CG::EngineImpl::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 void CG::EngineImpl::PreparePipelines()
 {
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = Vk::Initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-	VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo = Vk::Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
+	VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo = Vk::Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
 	VkPipelineColorBlendAttachmentState blendAttachmentStateCreateInfo = Vk::Initializers::PipelineColorBlendAttachmentState(
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_FALSE);
 	VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo = Vk::Initializers::PipelineColorBlendStateCreateInfo(1, &blendAttachmentStateCreateInfo);
@@ -202,9 +205,12 @@ void CG::EngineImpl::PreparePipelines()
 
 	// Wire frame rendering pipeline
     if (vkDevice->enabledFeatures.fillModeNonSolid) {
-        rasterizationStateCreateInfo.polygonMode = VK_POLYGON_MODE_LINE;
-        rasterizationStateCreateInfo.lineWidth = 1.0f;
+        VkPipelineRasterizationStateCreateInfo wireframeRasterizationCI = rasterizationStateCreateInfo;
+        wireframeRasterizationCI.polygonMode = VK_POLYGON_MODE_LINE;
+        wireframeRasterizationCI.lineWidth = 1.0f;
+        pipelineCreateInfo.pRasterizationState = &wireframeRasterizationCI;
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.wireframe));
+        pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
 	}
     else
     {
@@ -278,7 +284,7 @@ void CG::EngineImpl::BuildCommandBuffers()
         if (testSkybox)
         {
             // all pipelines placed inside class
-            // testSkybox->Draw(drawCmdBuffers[i]);
+            testSkybox->Draw(drawCmdBuffers[i]);
         }
 
         if (testScene && testScene->IsLoaded())
@@ -522,8 +528,6 @@ void CG::EngineImpl::PrepareUniformBuffers()
 
 	// Map persistent
 	VK_CHECK_RESULT(sceneUbo.Map());
-
-	UpdateUniformBuffers();
 }
 
 void CG::EngineImpl::UpdateUniformBuffers()
@@ -557,14 +561,18 @@ void CG::EngineImpl::UpdateUniformBuffers()
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
 
-    // TODO: calculate using bbox data from model class
+    float scale = (1.0f / std::max(testScene->GetSize().x, std::max(testScene->GetSize().y, testScene->GetSize().z))) * 0.5f;
+
     sceneUboData.model = glm::mat4(1.0f);
+    sceneUboData.model[0][0] = scale;
+    sceneUboData.model[1][1] = scale;
+    sceneUboData.model[2][2] = scale;
 
     sceneUbo.CopyTo(&sceneUboData, sizeof(sceneUboData));
 
 	if (testSkybox)
 	{
-		// testSkybox->UpdateCameraUniformBuffer(cameraComponent);
+		testSkybox->UpdateCameraUniformBuffer(cameraComponent);
 	}
 }
 
@@ -723,7 +731,8 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
         testSkybox->LoadFromFile(cubeMapFilePath, vkDevice, queue);
 		testSkybox->SetupDescriptorSet(descriptorPool);
         testSkybox->PreparePipeline(renderPass, pipelineCache);
-        // GenerateIrradianceSampler();
+
+        GenerateIrradianceSampler();
 	}
     catch (const Vk::AssetLoadingException & e)
     {
@@ -774,6 +783,7 @@ void CG::EngineImpl::RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk:
                 pushConstBlockMaterial.alphaMask = static_cast<float>(primitive->material.alphaMode == Vk::GLTFModel::Material::eAlphaMode::kAlphaModeMask);
                 pushConstBlockMaterial.alphaMaskCutoff = primitive->material.alphaCutoff;
 
+
                 if (primitive->material.pbrWorkflows.metallicRoughness) {
                     // Metallic roughness workflow
                     pushConstBlockMaterial.workflow = static_cast<float>(ePBRWorkflows::kPbrMetalRough);
@@ -788,6 +798,11 @@ void CG::EngineImpl::RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk:
                     // Specular glossiness workflow
                     // Not supported
                     pushConstBlockMaterial.workflow = static_cast<float>(ePBRWorkflows::kPbrSpecGloss);
+                    pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
+                    pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
+                    pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
+                    pushConstBlockMaterial.physicalDescriptorTextureSet = primitive->material.metallicRoughnessTexture != nullptr ? primitive->material.texCoordSets.metallicRoughness : -1;
+                    pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
                 }
 
                 vkCmdPushConstants(drawCmdBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);

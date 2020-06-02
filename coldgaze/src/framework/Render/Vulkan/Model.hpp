@@ -40,6 +40,17 @@ namespace CG
 		class GLTFModel
 		{
 		public:
+			struct AABBox
+			{
+				glm::vec3 min = {};
+				glm::vec3 max = {};
+                bool valid = false;
+				AABBox() {};
+				AABBox(glm::vec3 min, glm::vec3 max) : min(min), max(max), valid(true){};
+
+				AABBox GetAABB(const glm::mat4& m);
+			};
+
 			// TODO: animations update
             // The vertex layout for the model
             struct Vertex
@@ -113,6 +124,8 @@ namespace CG
 				Material &material;
 				bool hasIndices;
 
+				AABBox bbox;
+
                 Primitive(
 					uint32_t firstIndex,
                     uint32_t indexCount,
@@ -124,6 +137,8 @@ namespace CG
 
 			struct Mesh {
 				std::vector<std::unique_ptr<Primitive>> primitives = {};
+
+				AABBox bbox = {};
 
                 struct UniformBuffer {
 					Buffer buffer;
@@ -163,6 +178,8 @@ namespace CG
                 glm::vec3 translation {};
                 glm::vec3 scale { 1.0f };
                 glm::quat rotation {};
+
+				AABBox bbox;
 
 				glm::mat4 GetLocalMatrix();
 				glm::mat4 GetWorldMatrix();
@@ -218,6 +235,8 @@ namespace CG
 			bool IsLoaded() const;
 			void SetLoaded(bool loaded);
 
+			const glm::vec3& GetSize() const;
+
 		private:
 			static VkSamplerAddressMode GetVkWrapMode(int32_t wrapMode);
 			static VkFilter GetVkFilterMode(int32_t filterMode);
@@ -227,6 +246,8 @@ namespace CG
             void LoadMaterials(const tinygltf::Model& input);
 			void LoadAnimations(const tinygltf::Model& input);
             void LoadSkins(const tinygltf::Model& input);
+
+			void CalculateSize();
 
 			void LoadNode(Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& input,
 				std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale);
@@ -244,6 +265,8 @@ namespace CG
             std::vector<Material> materials;
             std::vector<Animation> animations;
             std::vector<std::string> extensions;
+
+			glm::vec3 size = {};
 
 			// for async loading, TODO: move mutex here
 			bool loaded = false;

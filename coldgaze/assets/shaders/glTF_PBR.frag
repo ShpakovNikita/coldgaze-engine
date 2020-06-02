@@ -163,15 +163,16 @@ void main()
 	vec4 albedo;
 
 	if (material.alphaMask == 1.0f) {
-		if (material.baseColorTextureSet > -1) {
-			albedo = texture(albedoMap, material.baseColorTextureSet == 0 ? inUV0 : inUV1) * material.baseColorFactor;
-		} else {
-			albedo = material.baseColorFactor;
-		}
 		if (albedo.a < material.alphaMaskCutoff) {
 			discard;
 		}
 	}
+    
+    if (material.baseColorTextureSet > -1) {
+        albedo = texture(albedoMap, material.baseColorTextureSet == 0 ? inUV0 : inUV1) * material.baseColorFactor;
+    } else {
+        albedo = material.baseColorFactor;
+    }
     
     vec4 localPos = uboScene.projection * uboScene.view * vec4(inWorldPos, 1.0);
 
@@ -226,6 +227,4 @@ void main()
     {
         outFragColor = vec4(0.0f, 0.0f, 1.0f, 1.0f);
     }
-    
-    outFragColor = albedo;
 }
