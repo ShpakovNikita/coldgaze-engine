@@ -87,6 +87,14 @@ namespace CG
 					vkFreeMemory(device, memory, nullptr);
 				}
 			}
+
+            ~Buffer()
+            {
+				if (mapped)
+				{
+					Destroy();
+				}
+            }
 		};
 	}
 }

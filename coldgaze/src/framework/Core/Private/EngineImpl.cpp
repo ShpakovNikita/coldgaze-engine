@@ -29,11 +29,17 @@
 
 using namespace CG;
 
-constexpr float DEFAULT_FOV = 60.0f;
+constexpr uint32_t kIndexRaygen = 0;
+constexpr uint32_t kIndexMiss = 1;
+constexpr uint32_t kIndexClosestHit = 2;
 
 CG::EngineImpl::EngineImpl(CG::EngineConfig& engineConfig)
     : CG::Engine(engineConfig)
-{ }
+{
+    enabledInstanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    enabledDeviceExtensions.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+    enabledDeviceExtensions.push_back(VK_NV_RAY_TRACING_EXTENSION_NAME);
+}
 
 CG::EngineImpl::~EngineImpl() = default;
 
@@ -69,6 +75,9 @@ void CG::EngineImpl::Prepare()
 {
     Engine::Prepare();
 
+    InitRayTracing();
+    LoadNVRayTracingProcs();
+
 	SetupSystems();
 
     PrepareUniformBuffers();
@@ -79,6 +88,15 @@ void CG::EngineImpl::Prepare()
     LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
 	PreparePipelines();
+
+
+    // CreateNVRayTracingGeometry();
+    CreateNVRayTracingStoreImage();
+    CreateRTXPipeline();
+    CreateShaderBindingTable();
+    CreateRTXDescriptorSets();
+
+
 	BuildCommandBuffers();
 
     UpdateUniformBuffers();
@@ -197,9 +215,9 @@ void CG::EngineImpl::PreparePipelines()
 	pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
 	pipelineCreateInfo.pStages = shaderStages.data();
 
-    multisampleStateCreateInfo.rasterizationSamples = sampleCount;
-    multisampleStateCreateInfo.sampleShadingEnable = VK_TRUE;
-    multisampleStateCreateInfo.minSampleShading = 0.25f;
+    // multisampleStateCreateInfo.rasterizationSamples = sampleCount;
+    // multisampleStateCreateInfo.sampleShadingEnable = VK_TRUE;
+    // multisampleStateCreateInfo.minSampleShading = 0.25f;
 
 	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidPBR_MSAA));
 
@@ -239,10 +257,10 @@ void CG::EngineImpl::BuildCommandBuffers()
 	cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	cmdBufInfo.pNext = nullptr;
 
-	std::array<VkClearValue, 3> clearValues;
+	std::array<VkClearValue, 2> clearValues;
     clearValues[0].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
-    clearValues[1].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
-	clearValues[2].depthStencil = { 1.0f, 0 };
+    // clearValues[1].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b, uiData.bgColor.a };
+	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassBeginInfo = {};
 	renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -269,13 +287,14 @@ void CG::EngineImpl::BuildCommandBuffers()
 	scissor.offset.x = 0;
 	scissor.offset.y = 0;
 
-    VkDeviceSize offsets[1] = { 0 };
+    // VkDeviceSize offsets[1] = { 0 };
 
 	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
 	{
 		renderPassBeginInfo.framebuffer = frameBuffers[i];
+        VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
 
-		VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
+        /*
 		vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
@@ -286,12 +305,14 @@ void CG::EngineImpl::BuildCommandBuffers()
             // all pipelines placed inside class
             testSkybox->Draw(drawCmdBuffers[i]);
         }
+        */
 
+        /*
         if (testScene && testScene->IsLoaded())
         {
             vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.solidPBR_MSAA);
 
-            vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &testScene->vertices.buffer, offsets);
+            vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &testScene->vertices.buffer.buffer, offsets);
             if (testScene->indices.buffer.buffer != VK_NULL_HANDLE) {
                 vkCmdBindIndexBuffer(drawCmdBuffers[i], testScene->indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
             }
@@ -310,11 +331,20 @@ void CG::EngineImpl::BuildCommandBuffers()
                 RenderNode(node.get(), i, Vk::GLTFModel::Material::eAlphaMode::kAlphaModeBlend);
             }
         }
+        */
 
-		imGui->DrawFrame(drawCmdBuffers[i]);
+        DrawRayTracingData(i);
+
+        vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
+        vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
+		
+        imGui->DrawFrame(drawCmdBuffers[i]);
 
 		vkCmdEndRenderPass(drawCmdBuffers[i]);
-		VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
+
+        VK_CHECK_RESULT(vkEndCommandBuffer(drawCmdBuffers[i]));
 	}
 }
 
@@ -322,7 +352,7 @@ void CG::EngineImpl::SetupDescriptors()
 {
     assert(testScene != nullptr);
 
-    constexpr uint32_t uniformSamplersCount = 4;
+    constexpr uint32_t uniformSamplersCount = 5;
 
     uint32_t imageSamplerCount = 0;
     uint32_t materialCount = 0;
@@ -396,7 +426,7 @@ void CG::EngineImpl::SetupDescriptors()
             { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
             { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
             { 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-            // { 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
+            { 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
         };
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
         descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -418,7 +448,7 @@ void CG::EngineImpl::SetupDescriptors()
                 emptyTexture.descriptor,
                 material.normalTexture ? material.normalTexture->texture.descriptor : emptyTexture.descriptor,
                 material.occlusionTexture ? material.occlusionTexture->texture.descriptor : emptyTexture.descriptor,
-                // material.emissiveTexture ? material.emissiveTexture->texture.descriptor : emptyTexture.descriptor,
+                material.emissiveTexture ? material.emissiveTexture->texture.descriptor : emptyTexture.descriptor,
             };
 
             // TODO: spec gloss
@@ -464,32 +494,6 @@ void CG::EngineImpl::SetupDescriptors()
 void CG::EngineImpl::BindModelMaterials()
 {
     SetupDescriptors();
-
-    /*
-    // TODO: optimize storage in images
-    std::vector<Vk::GLTFModel::Image>& images = testScene->GetImages();
-    const std::vector<Vk::GLTFModel::Texture>& sceneTextures = testScene->GetTextures();
-
-    for (auto& material : testScene->GetMaterials())
-    {
-        auto& baseColorImage = images[sceneTextures[material.baseColorTextureIndex].imageIndex];
-        auto& normalMapImage = images[sceneTextures[material.normalMapTextureIndex].imageIndex];
-        auto& metallicRoughnessImage = images[sceneTextures[material.metallicRoughnessTextureIndex].imageIndex];
-
-        const VkDescriptorSetAllocateInfo texturesAllocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.textures, 1);
-
-        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &texturesAllocInfo, &material.descriptorSet));
-
-        std::vector<VkWriteDescriptorSet> texturesWriteDescriptorSets =
-        {
-            Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &baseColorImage.texture->descriptor),
-            Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, &normalMapImage.texture->descriptor),
-            Vk::Initializers::WriteDescriptorSet(material.descriptorSet, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2, &metallicRoughnessImage.texture->descriptor),
-        };
-
-        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(texturesWriteDescriptorSets.size()), texturesWriteDescriptorSets.data(), 0, nullptr);
-    }
-    */
 }
 
 void CG::EngineImpl::UnbindModelMaterials()
@@ -567,6 +571,8 @@ void CG::EngineImpl::UpdateUniformBuffers()
     sceneUboData.model[0][0] = scale;
     sceneUboData.model[1][1] = scale;
     sceneUboData.model[2][2] = scale;
+
+    sceneUboData.cameraPos = glm::vec4(cameraComponent->position, 1.0f);
 
     sceneUbo.CopyTo(&sceneUboData, sizeof(sceneUboData));
 
@@ -697,10 +703,10 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
     {
         LoadModel(modelFilePath);
 
-        {
-            BindModelMaterials();
-            testScene->SetLoaded(true);
-        }
+        BindModelMaterials();
+        testScene->SetLoaded(true);
+
+        CreateNVRayTracingGeometry();
     }
     catch (const Vk::AssetLoadingException& e)
     {
@@ -731,8 +737,6 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
         testSkybox->LoadFromFile(cubeMapFilePath, vkDevice, queue);
 		testSkybox->SetupDescriptorSet(descriptorPool);
         testSkybox->PreparePipeline(renderPass, pipelineCache);
-
-        GenerateIrradianceSampler();
 	}
     catch (const Vk::AssetLoadingException & e)
     {
@@ -847,405 +851,514 @@ void CG::EngineImpl::SetupNodeDescriptorSet(Vk::GLTFModel::Node* node)
     }
 }
 
-void CG::EngineImpl::GenerateIrradianceSampler()
+void CG::EngineImpl::CreateBottomLevelAccelerationStructure(const VkGeometryNV* geometries, uint32_t blasIndex, size_t geomCount)
 {
-    assert(testSkybox);
+    AccelerationStructure& bottomLevelAS = blasData[blasIndex];
 
-    auto tStart = std::chrono::high_resolution_clock::now();
-
-    const VkFormat format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    const int32_t dim = 64;
-    const uint32_t numMips = static_cast<uint32_t>(floor(log2(dim))) + 1;
-
-    // Pre-filtered cube map
-    // Image
-    VkImageCreateInfo imageCI = Vk::Initializers::ImageCreateInfo();
-    imageCI.imageType = VK_IMAGE_TYPE_2D;
-    imageCI.format = format;
-    imageCI.extent.width = dim;
-    imageCI.extent.height = dim;
-    imageCI.extent.depth = 1;
-    imageCI.mipLevels = numMips;
-    imageCI.arrayLayers = 6;
-    imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageCI.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    imageCI.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &imageCI, nullptr, &textures.irradianceCube.image));
-
-    VkMemoryAllocateInfo irradianceCubeMemAlloc = Vk::Initializers::MemoryAllocateInfo();
-    VkMemoryRequirements irradianceCubeMemReqs;
-    vkGetImageMemoryRequirements(vkDevice->logicalDevice, textures.irradianceCube.image, &irradianceCubeMemReqs);
-    irradianceCubeMemAlloc.allocationSize = irradianceCubeMemReqs.size;
-    irradianceCubeMemAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(irradianceCubeMemReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &irradianceCubeMemAlloc, nullptr, &textures.irradianceCube.deviceMemory));
-    VK_CHECK_RESULT(vkBindImageMemory(vkDevice->logicalDevice, textures.irradianceCube.image, textures.irradianceCube.deviceMemory, 0));
-
-    // Image view
-    VkImageViewCreateInfo viewCI = Vk::Initializers::ImageViewCreateInfo();
-    viewCI.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-    viewCI.format = format;
-    viewCI.subresourceRange = {};
-    viewCI.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewCI.subresourceRange.levelCount = numMips;
-    viewCI.subresourceRange.layerCount = 6;
-    viewCI.image = textures.irradianceCube.image;
-    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &viewCI, nullptr, &textures.irradianceCube.view));
-    // Sampler
-    VkSamplerCreateInfo samplerCI = Vk::Initializers::SamplerCreateInfo();
-    samplerCI.magFilter = VK_FILTER_LINEAR;
-    samplerCI.minFilter = VK_FILTER_LINEAR;
-    samplerCI.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerCI.minLod = 0.0f;
-    samplerCI.maxLod = static_cast<float>(numMips);
-    samplerCI.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
-    VK_CHECK_RESULT(vkCreateSampler(vkDevice->logicalDevice, &samplerCI, nullptr, &textures.irradianceCube.sampler));
-
-    textures.irradianceCube.descriptor.imageView = textures.irradianceCube.view;
-    textures.irradianceCube.descriptor.sampler = textures.irradianceCube.sampler;
-    textures.irradianceCube.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    textures.irradianceCube.vkDevice = vkDevice;
-
-    // FB, Att, RP, Pipe, etc.
-    VkAttachmentDescription attDesc = {};
-    // Color attachment
-    attDesc.format = format;
-    attDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-    attDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    VkAttachmentReference colorReference = { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
-
-    VkSubpassDescription subpassDescription = {};
-    subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpassDescription.colorAttachmentCount = 1;
-    subpassDescription.pColorAttachments = &colorReference;
-
-    // Use subpass dependencies for layout transitions
-    std::array<VkSubpassDependency, 2> dependencies;
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    // Renderpass
-    VkRenderPassCreateInfo renderPassCI = Vk::Initializers::RenderPassCreateInfo();
-    renderPassCI.attachmentCount = 1;
-    renderPassCI.pAttachments = &attDesc;
-    renderPassCI.subpassCount = 1;
-    renderPassCI.pSubpasses = &subpassDescription;
-    renderPassCI.dependencyCount = 2;
-    renderPassCI.pDependencies = dependencies.data();
-    VkRenderPass renderpass;
-    VK_CHECK_RESULT(vkCreateRenderPass(vkDevice->logicalDevice, &renderPassCI, nullptr, &renderpass));
-
-    struct {
-        VkImage image;
-        VkImageView view;
-        VkDeviceMemory memory;
-        VkFramebuffer framebuffer;
-    } offscreen;
-
-    // Offfscreen framebuffer
+    // Prepare handle
     {
-        // Color attachment
-        VkImageCreateInfo imageCreateInfo = Vk::Initializers::ImageCreateInfo();
-        imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
-        imageCreateInfo.format = format;
-        imageCreateInfo.extent.width = dim;
-        imageCreateInfo.extent.height = dim;
-        imageCreateInfo.extent.depth = 1;
-        imageCreateInfo.mipLevels = 1;
-        imageCreateInfo.arrayLayers = 1;
-        imageCreateInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-        imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        imageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-        imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &imageCreateInfo, nullptr, &offscreen.image));
+        VkAccelerationStructureInfoNV accelerationStructureInfo = {};
+        accelerationStructureInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_INFO_NV;
+        accelerationStructureInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_NV;
+        accelerationStructureInfo.instanceCount = 0;
+        accelerationStructureInfo.geometryCount = static_cast<uint32_t>(geomCount);
+        accelerationStructureInfo.pGeometries = geometries;
 
-        VkMemoryAllocateInfo memAlloc = Vk::Initializers::MemoryAllocateInfo();
-        VkMemoryRequirements memReqs;
-        vkGetImageMemoryRequirements(vkDevice->logicalDevice, offscreen.image, &memReqs);
-        memAlloc.allocationSize = memReqs.size;
-        memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-        VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAlloc, nullptr, &offscreen.memory));
-        VK_CHECK_RESULT(vkBindImageMemory(vkDevice->logicalDevice, offscreen.image, offscreen.memory, 0));
+        VkAccelerationStructureCreateInfoNV accelerationStructureCI = {};
+        accelerationStructureCI.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_NV;
+        accelerationStructureCI.info = accelerationStructureInfo;
+        VK_CHECK_RESULT(vkCreateAccelerationStructureNV(vkDevice->logicalDevice, &accelerationStructureCI, nullptr, &bottomLevelAS.accelerationStructure));
 
-        VkImageViewCreateInfo colorImageView = Vk::Initializers::ImageViewCreateInfo();
-        colorImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        colorImageView.format = format;
-        colorImageView.flags = 0;
-        colorImageView.subresourceRange = {};
-        colorImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        colorImageView.subresourceRange.baseMipLevel = 0;
-        colorImageView.subresourceRange.levelCount = 1;
-        colorImageView.subresourceRange.baseArrayLayer = 0;
-        colorImageView.subresourceRange.layerCount = 1;
-        colorImageView.image = offscreen.image;
-        VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &colorImageView, nullptr, &offscreen.view));
+        VkAccelerationStructureMemoryRequirementsInfoNV memoryRequirementsInfo{};
+        memoryRequirementsInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_INFO_NV;
+        memoryRequirementsInfo.accelerationStructure = bottomLevelAS.accelerationStructure;
 
-        VkFramebufferCreateInfo fbufCreateInfo = Vk::Initializers::FramebufferCreateInfo();
-        fbufCreateInfo.renderPass = renderpass;
-        fbufCreateInfo.attachmentCount = 1;
-        fbufCreateInfo.pAttachments = &offscreen.view;
-        fbufCreateInfo.width = dim;
-        fbufCreateInfo.height = dim;
-        fbufCreateInfo.layers = 1;
-        VK_CHECK_RESULT(vkCreateFramebuffer(vkDevice->logicalDevice, &fbufCreateInfo, nullptr, &offscreen.framebuffer));
+        VkMemoryRequirements2 memoryRequirements2 = {};
+        vkGetAccelerationStructureMemoryRequirementsNV(vkDevice->logicalDevice, &memoryRequirementsInfo, &memoryRequirements2);
 
-        VkCommandBuffer layoutCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-        Vk::Utils::SetImageLayout(
-            layoutCmd,
-            offscreen.image,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        vkDevice->FlushCommandBuffer(layoutCmd, queue, true);
+        VkMemoryAllocateInfo memoryAllocateInfo = Vk::Initializers::MemoryAllocateInfo();
+        memoryAllocateInfo.allocationSize = memoryRequirements2.memoryRequirements.size;
+        memoryAllocateInfo.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memoryRequirements2.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memoryAllocateInfo, nullptr, &bottomLevelAS.memory));
+
+        VkBindAccelerationStructureMemoryInfoNV accelerationStructureMemoryInfo = {};
+        accelerationStructureMemoryInfo.sType = VK_STRUCTURE_TYPE_BIND_ACCELERATION_STRUCTURE_MEMORY_INFO_NV;
+        accelerationStructureMemoryInfo.accelerationStructure = bottomLevelAS.accelerationStructure;
+        accelerationStructureMemoryInfo.memory = bottomLevelAS.memory;
+        VK_CHECK_RESULT(vkBindAccelerationStructureMemoryNV(vkDevice->logicalDevice, 1, &accelerationStructureMemoryInfo));
+
+        VK_CHECK_RESULT(vkGetAccelerationStructureHandleNV(vkDevice->logicalDevice, bottomLevelAS.accelerationStructure, sizeof(uint64_t), &bottomLevelAS.handle));
+
+    }
+   
+    // Build step
+    {
+        // Acceleration structure build requires some scratch space to store temporary information
+        VkAccelerationStructureMemoryRequirementsInfoNV memoryRequirementsInfo{};
+        memoryRequirementsInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_INFO_NV;
+        memoryRequirementsInfo.type = VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_OBJECT_NV;
+
+        VkMemoryRequirements2 memReqBottomLevelAS;
+        memoryRequirementsInfo.accelerationStructure = bottomLevelAS.accelerationStructure;
+        vkGetAccelerationStructureMemoryRequirementsNV(vkDevice->logicalDevice, &memoryRequirementsInfo, &memReqBottomLevelAS);
+
+        const VkDeviceSize scratchBufferSize = memReqBottomLevelAS.memoryRequirements.size;
+
+        Vk::Buffer scratchBuffer;
+        VK_CHECK_RESULT(vkDevice->CreateBuffer(
+            VK_BUFFER_USAGE_RAY_TRACING_BIT_NV,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            &scratchBuffer,
+            scratchBufferSize));
+
+        VkCommandBuffer cmdBuffer = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+        VkAccelerationStructureInfoNV buildInfo{};
+        buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_INFO_NV;
+        buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_NV;
+        buildInfo.geometryCount = static_cast<uint32_t>(geomCount);
+        buildInfo.pGeometries = geometries;
+
+        vkCmdBuildAccelerationStructureNV(
+            cmdBuffer,
+            &buildInfo,
+            VK_NULL_HANDLE,
+            0,
+            VK_FALSE,
+            bottomLevelAS.accelerationStructure,
+            VK_NULL_HANDLE,
+            scratchBuffer.buffer,
+            0);
+
+        VkMemoryBarrier memoryBarrier = Vk::Initializers::CreateMemoryBarrier();
+        memoryBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_NV | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_NV;
+        memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_NV | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_NV;
+        vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_NV, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_NV, 0, 1, &memoryBarrier, 0, 0, 0, 0);
+
+        vkDevice->FlushCommandBuffer(cmdBuffer, queue);
+    }
+}
+
+void CG::EngineImpl::CreateTopLevelAccelerationStructure()
+{
+    {
+        VkAccelerationStructureInfoNV accelerationStructureInfo = {};
+        accelerationStructureInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_INFO_NV;
+        accelerationStructureInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_NV;
+        accelerationStructureInfo.instanceCount = static_cast<uint32_t>(blasData.size());
+        accelerationStructureInfo.geometryCount = 0;
+
+        VkAccelerationStructureCreateInfoNV accelerationStructureCI = {};
+        accelerationStructureCI.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_NV;
+        accelerationStructureCI.info = accelerationStructureInfo;
+        VK_CHECK_RESULT(vkCreateAccelerationStructureNV(vkDevice->logicalDevice, &accelerationStructureCI, nullptr, &topLevelAS.accelerationStructure));
+
+        VkAccelerationStructureMemoryRequirementsInfoNV memoryRequirementsInfo{};
+        memoryRequirementsInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_INFO_NV;
+        memoryRequirementsInfo.accelerationStructure = topLevelAS.accelerationStructure;
+
+        VkMemoryRequirements2 memoryRequirements2 = {};
+        vkGetAccelerationStructureMemoryRequirementsNV(vkDevice->logicalDevice, &memoryRequirementsInfo, &memoryRequirements2);
+
+        VkMemoryAllocateInfo memoryAllocateInfo = Vk::Initializers::MemoryAllocateInfo();
+        memoryAllocateInfo.allocationSize = memoryRequirements2.memoryRequirements.size;
+        memoryAllocateInfo.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memoryRequirements2.memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memoryAllocateInfo, nullptr, &topLevelAS.memory));
+
+        VkBindAccelerationStructureMemoryInfoNV accelerationStructureMemoryInfo = {};
+        accelerationStructureMemoryInfo.sType = VK_STRUCTURE_TYPE_BIND_ACCELERATION_STRUCTURE_MEMORY_INFO_NV;
+        accelerationStructureMemoryInfo.accelerationStructure = topLevelAS.accelerationStructure;
+        accelerationStructureMemoryInfo.memory = topLevelAS.memory;
+        VK_CHECK_RESULT(vkBindAccelerationStructureMemoryNV(vkDevice->logicalDevice, 1, &accelerationStructureMemoryInfo));
+
+        VK_CHECK_RESULT(vkGetAccelerationStructureHandleNV(vkDevice->logicalDevice, topLevelAS.accelerationStructure, sizeof(uint64_t), &topLevelAS.handle));
     }
 
-    // Descriptors
-    VkDescriptorSetLayout descriptorsetlayout;
-    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-        Vk::Initializers::DescriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 0),
-    };
-    VkDescriptorSetLayoutCreateInfo descriptorsetlayoutCI = Vk::Initializers::DescriptorSetLayoutCreateInfo(setLayoutBindings);
-    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorsetlayoutCI, nullptr, &descriptorsetlayout));
-
-    // Descriptor Pool
-    std::vector<VkDescriptorPoolSize> poolSizes = { Vk::Initializers::DescriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1) };
-    VkDescriptorPoolCreateInfo descriptorPoolCI = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, 2);
-    VkDescriptorPool descriptorpool;
-    VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolCI, nullptr, &descriptorpool));
-
-    // Descriptor sets
-    VkDescriptorSet descriptorset;
-    VkDescriptorSetAllocateInfo allocInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorpool, &descriptorsetlayout, 1);
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &allocInfo, &descriptorset));
-    VkWriteDescriptorSet writeDescriptorSet = Vk::Initializers::WriteDescriptorSet(descriptorset, 
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &testSkybox->GetTexture2D()->descriptor);
-    vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-
-    // Pipeline layout
-    struct PushBlock {
-        glm::mat4 mvp;
-    } pushBlock;
-
-    VkPipelineLayout pipelinelayout;
-    std::vector<VkPushConstantRange> pushConstantRanges = {
-        Vk::Initializers::PushConstantRange(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PushBlock), 0),
-    };
-    VkPipelineLayoutCreateInfo pipelineLayoutCI = Vk::Initializers::PipelineLayoutCreateInfo(&descriptorsetlayout, 1);
-    pipelineLayoutCI.pushConstantRangeCount = 1;
-    pipelineLayoutCI.pPushConstantRanges = pushConstantRanges.data();
-    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCI, nullptr, &pipelinelayout));
-
-    // Pipeline
-    VkPipelineInputAssemblyStateCreateInfo inputAssemblyState = Vk::Initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-    VkPipelineRasterizationStateCreateInfo rasterizationState = Vk::Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-    VkPipelineColorBlendAttachmentState blendAttachmentState = Vk::Initializers::PipelineColorBlendAttachmentState(0xf, VK_FALSE);
-    VkPipelineColorBlendStateCreateInfo colorBlendState = Vk::Initializers::PipelineColorBlendStateCreateInfo(1, &blendAttachmentState);
-    VkPipelineDepthStencilStateCreateInfo depthStencilState = Vk::Initializers::PipelineDepthStencilStateCreateInfo(VK_FALSE, VK_FALSE, VK_COMPARE_OP_LESS_OR_EQUAL);
-    VkPipelineViewportStateCreateInfo viewportState = Vk::Initializers::PipelineViewportStateCreateInfo(1, 1);
-    VkPipelineMultisampleStateCreateInfo multisampleState = Vk::Initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
-    std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-    VkPipelineDynamicStateCreateInfo dynamicState = Vk::Initializers::PipelineDynamicStateCreateInfo(dynamicStateEnables);
-
-    Vk::VertexLayout vertexLayout =
     {
+        // Single instance with a 3x4 transform matrix for the ray traced triangle
+        Vk::Buffer instanceBuffer;
+
+        std::vector<GeometryInstance> geometryInstances(blasData.size());
+        for (size_t i = 0; i < geometryInstances.size(); ++i)
         {
-            Vk::eComponent::kPosition,
-            Vk::eComponent::kNormal,
-            Vk::eComponent::kUv,
+            GeometryInstance& geometryInstance = geometryInstances[i];
+
+            geometryInstance.transform = glm::transpose(blasData[i].transform);
+            geometryInstance.instanceId = i;
+            geometryInstance.mask = 0xff;
+            geometryInstance.instanceOffset = 0;
+            geometryInstance.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_CULL_DISABLE_BIT_NV;
+            geometryInstance.accelerationStructureHandle = blasData[i].handle;
         }
+
+        VK_CHECK_RESULT(vkDevice->CreateBuffer(
+            VK_BUFFER_USAGE_RAY_TRACING_BIT_NV,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            &instanceBuffer,
+            sizeof(GeometryInstance) * geometryInstances.size(),
+            geometryInstances.data()));
+
+        // Acceleration structure build requires some scratch space to store temporary information
+        VkAccelerationStructureMemoryRequirementsInfoNV memoryRequirementsInfo{};
+        memoryRequirementsInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_INFO_NV;
+        memoryRequirementsInfo.type = VK_ACCELERATION_STRUCTURE_MEMORY_REQUIREMENTS_TYPE_OBJECT_NV;
+
+        VkMemoryRequirements2 memReqTopLevelAS;
+        memoryRequirementsInfo.accelerationStructure = topLevelAS.accelerationStructure;
+        vkGetAccelerationStructureMemoryRequirementsNV(vkDevice->logicalDevice, &memoryRequirementsInfo, &memReqTopLevelAS);
+
+        const VkDeviceSize scratchBufferSize = memReqTopLevelAS.memoryRequirements.size;
+
+        Vk::Buffer scratchBuffer;
+        VK_CHECK_RESULT(vkDevice->CreateBuffer(
+            VK_BUFFER_USAGE_RAY_TRACING_BIT_NV,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            &scratchBuffer,
+            scratchBufferSize));
+
+        VkCommandBuffer cmdBuffer = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+
+        VkAccelerationStructureInfoNV buildInfo{};
+        buildInfo.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_INFO_NV;
+        buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_NV;
+        buildInfo.pGeometries = 0;
+        buildInfo.geometryCount = 0;
+        buildInfo.instanceCount = static_cast<uint32_t>(blasData.size());
+
+        vkCmdBuildAccelerationStructureNV(
+            cmdBuffer,
+            &buildInfo,
+            instanceBuffer.buffer,
+            0,
+            VK_FALSE,
+            topLevelAS.accelerationStructure,
+            VK_NULL_HANDLE,
+            scratchBuffer.buffer,
+            0);
+
+        VkMemoryBarrier memoryBarrier = Vk::Initializers::CreateMemoryBarrier();
+        memoryBarrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_NV | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_NV;
+        memoryBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_NV | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_NV;
+        vkCmdPipelineBarrier(cmdBuffer, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_NV, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_NV, 0, 1, &memoryBarrier, 0, 0, 0, 0);
+
+        vkDevice->FlushCommandBuffer(cmdBuffer, queue);
+
+        instanceBuffer.Destroy();
+    }
+}
+
+void CG::EngineImpl::LoadNVRayTracingProcs()
+{
+    VkDevice device = vkDevice->logicalDevice;
+
+    // Get VK_NV_ray_tracing related function pointers
+    vkCreateAccelerationStructureNV = reinterpret_cast<PFN_vkCreateAccelerationStructureNV>(vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureNV"));
+    vkDestroyAccelerationStructureNV = reinterpret_cast<PFN_vkDestroyAccelerationStructureNV>(vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureNV"));
+    vkBindAccelerationStructureMemoryNV = reinterpret_cast<PFN_vkBindAccelerationStructureMemoryNV>(vkGetDeviceProcAddr(device, "vkBindAccelerationStructureMemoryNV"));
+    vkGetAccelerationStructureHandleNV = reinterpret_cast<PFN_vkGetAccelerationStructureHandleNV>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureHandleNV"));
+    vkGetAccelerationStructureMemoryRequirementsNV = reinterpret_cast<PFN_vkGetAccelerationStructureMemoryRequirementsNV>(vkGetDeviceProcAddr(device, "vkGetAccelerationStructureMemoryRequirementsNV"));
+    vkCmdBuildAccelerationStructureNV = reinterpret_cast<PFN_vkCmdBuildAccelerationStructureNV>(vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructureNV"));
+    vkCreateRayTracingPipelinesNV = reinterpret_cast<PFN_vkCreateRayTracingPipelinesNV>(vkGetDeviceProcAddr(device, "vkCreateRayTracingPipelinesNV"));
+    vkGetRayTracingShaderGroupHandlesNV = reinterpret_cast<PFN_vkGetRayTracingShaderGroupHandlesNV>(vkGetDeviceProcAddr(device, "vkGetRayTracingShaderGroupHandlesNV"));
+    vkCmdTraceRaysNV = reinterpret_cast<PFN_vkCmdTraceRaysNV>(vkGetDeviceProcAddr(device, "vkCmdTraceRaysNV"));
+}
+
+void CG::EngineImpl::CreateNVRayTracingGeometry()
+{
+    assert(testScene);
+
+    blasData.resize(testScene->GetPrimitivesCount());
+    std::vector<VkGeometryNV> geometries(testScene->GetPrimitivesCount());
+    uint32_t currentGeomIndex = 0;
+
+    for (const auto& node : testScene->GetFlatNodes())
+    {
+        if (node->mesh)
+        {
+            for (const auto& primitive : node->mesh->primitives)
+            {
+                VkGeometryNV& geometry = geometries[currentGeomIndex];
+                geometry.sType = VK_STRUCTURE_TYPE_GEOMETRY_NV;
+                geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_NV;
+                geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_GEOMETRY_TRIANGLES_NV;
+                geometry.geometry.triangles.vertexData = primitive->vertices.buffer;
+                geometry.geometry.triangles.vertexOffset = 0;
+                geometry.geometry.triangles.vertexCount = primitive->vertexCount;
+                geometry.geometry.triangles.vertexStride = sizeof(Vk::GLTFModel::Vertex);
+                geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+                geometry.geometry.triangles.indexData = primitive->indices.buffer;
+                geometry.geometry.triangles.indexOffset = 0;
+                geometry.geometry.triangles.indexCount = primitive->indexCount;
+                geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+                geometry.geometry.triangles.transformData = VK_NULL_HANDLE;
+                geometry.geometry.triangles.transformOffset = 0;
+                geometry.geometry.aabbs = {};
+                geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_GEOMETRY_AABB_NV;
+                geometry.flags = VK_GEOMETRY_OPAQUE_BIT_NV;
+
+                blasData[currentGeomIndex].transform = node->GetWorldMatrix();
+                CreateBottomLevelAccelerationStructure(&geometry, currentGeomIndex, 1);
+
+                ++currentGeomIndex;
+            }
+        }
+    }
+
+    CreateTopLevelAccelerationStructure();
+}
+
+// TODO: Handle on resize
+void CG::EngineImpl::CreateNVRayTracingStoreImage()
+{
+    VkImageCreateInfo image = Vk::Initializers::ImageCreateInfo();
+    image.imageType = VK_IMAGE_TYPE_2D;
+    image.format = vkSwapChain->colorFormat;
+    image.extent.width =  engineConfig.width;
+    image.extent.height = engineConfig.height;
+    image.extent.depth = 1;
+    image.mipLevels = 1;
+    image.arrayLayers = 1;
+    image.samples = VK_SAMPLE_COUNT_1_BIT;
+    image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+    image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &image, nullptr, &storageImage.image));
+
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(vkDevice->logicalDevice, storageImage.image, &memReqs);
+    VkMemoryAllocateInfo memoryAllocateInfo = Vk::Initializers::MemoryAllocateInfo();
+    memoryAllocateInfo.allocationSize = memReqs.size;
+    memoryAllocateInfo.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memoryAllocateInfo, nullptr, &storageImage.memory));
+    VK_CHECK_RESULT(vkBindImageMemory(vkDevice->logicalDevice, storageImage.image, storageImage.memory, 0));
+
+    VkImageViewCreateInfo colorImageView = Vk::Initializers::ImageViewCreateInfo();
+    colorImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    colorImageView.format = vkSwapChain->colorFormat;
+    colorImageView.subresourceRange = {};
+    colorImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    colorImageView.subresourceRange.baseMipLevel = 0;
+    colorImageView.subresourceRange.levelCount = 1;
+    colorImageView.subresourceRange.baseArrayLayer = 0;
+    colorImageView.subresourceRange.layerCount = 1;
+    colorImageView.image = storageImage.image;
+    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &colorImageView, nullptr, &storageImage.view));
+
+    VkCommandBuffer cmdBuffer = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+    Vk::Utils::SetImageLayout(cmdBuffer, storageImage.image,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_GENERAL,
+        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+    vkDevice->FlushCommandBuffer(cmdBuffer, queue);
+}
+
+void CG::EngineImpl::CreateShaderBindingTable()
+{
+    const uint32_t sbtSize = rayTracingProperties.shaderGroupHandleSize * 3;
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_RAY_TRACING_BIT_NV,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+        &shaderBindingTable,
+        sbtSize));
+    shaderBindingTable.Map();
+
+    auto shaderHandleStorage = new uint8_t[sbtSize];
+    // Get shader identifiers
+    VK_CHECK_RESULT(vkGetRayTracingShaderGroupHandlesNV(vkDevice->logicalDevice, pipelines.RTX, 0, 3, sbtSize, shaderHandleStorage));
+    auto* data = static_cast<uint8_t*>(shaderBindingTable.mapped);
+
+    // Copy the shader identifiers to the shader binding table
+    data += CopyShaderIdentifier(data, shaderHandleStorage, kIndexRaygen);
+    data += CopyShaderIdentifier(data, shaderHandleStorage, kIndexMiss);
+    data += CopyShaderIdentifier(data, shaderHandleStorage, kIndexClosestHit);
+    shaderBindingTable.Unmap();
+}
+
+VkDeviceSize CG::EngineImpl::CopyShaderIdentifier(uint8_t* data, const uint8_t* shaderHandleStorage, uint32_t groupIndex)
+{
+    const uint32_t shaderGroupHandleSize = rayTracingProperties.shaderGroupHandleSize;
+    memcpy(data, shaderHandleStorage + groupIndex * shaderGroupHandleSize, shaderGroupHandleSize);
+    return shaderGroupHandleSize;
+}
+
+void CG::EngineImpl::CreateRTXPipeline()
+{
+    VkDescriptorSetLayoutBinding accelerationStructureLayoutBinding{};
+    accelerationStructureLayoutBinding.binding = 0;
+    accelerationStructureLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
+    accelerationStructureLayoutBinding.descriptorCount = 1;
+    accelerationStructureLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_NV;
+
+    VkDescriptorSetLayoutBinding resultImageLayoutBinding{};
+    resultImageLayoutBinding.binding = 1;
+    resultImageLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    resultImageLayoutBinding.descriptorCount = 1;
+    resultImageLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_NV;
+
+    VkDescriptorSetLayoutBinding uniformBufferBinding{};
+    uniformBufferBinding.binding = 2;
+    uniformBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uniformBufferBinding.descriptorCount = 1;
+    uniformBufferBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_NV;
+
+    std::vector<VkDescriptorSetLayoutBinding> bindings({
+        accelerationStructureLayoutBinding,
+        resultImageLayoutBinding,
+        uniformBufferBinding
+        });
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &layoutInfo, nullptr, &descriptorSetLayouts.rtxSampleLayout));
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
+    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutCreateInfo.setLayoutCount = 1;
+    pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayouts.rtxSampleLayout;
+
+    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+
+    const uint32_t shaderIndexRaygen = 0;
+    const uint32_t shaderIndexMiss = 1;
+    const uint32_t shaderIndexClosestHit = 2;
+
+    std::array<VkPipelineShaderStageCreateInfo, 3> shaderStages;
+    shaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygen.rgen.spv", VK_SHADER_STAGE_RAYGEN_BIT_NV);
+    shaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/miss.rmiss.spv", VK_SHADER_STAGE_MISS_BIT_NV);
+    shaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthit.rchit.spv", VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV);
+
+    std::array<VkRayTracingShaderGroupCreateInfoNV, 3> groups{};
+    for (auto& group : groups) {
+        // Init all groups with some default values
+        group.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_NV;
+        group.generalShader = VK_SHADER_UNUSED_NV;
+        group.closestHitShader = VK_SHADER_UNUSED_NV;
+        group.anyHitShader = VK_SHADER_UNUSED_NV;
+        group.intersectionShader = VK_SHADER_UNUSED_NV;
+    }
+
+    // Links shaders and types to ray tracing shader groups
+    groups[kIndexRaygen].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_NV;
+    groups[kIndexRaygen].generalShader = shaderIndexRaygen;
+    groups[kIndexMiss].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_NV;
+    groups[kIndexMiss].generalShader = shaderIndexMiss;
+    groups[kIndexClosestHit].type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_NV;
+    groups[kIndexClosestHit].generalShader = VK_SHADER_UNUSED_NV;
+    groups[kIndexClosestHit].closestHitShader = shaderIndexClosestHit;
+
+    VkRayTracingPipelineCreateInfoNV rayPipelineInfo{};
+    rayPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_NV;
+    rayPipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+    rayPipelineInfo.pStages = shaderStages.data();
+    rayPipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
+    rayPipelineInfo.pGroups = groups.data();
+    rayPipelineInfo.maxRecursionDepth = 1;
+    rayPipelineInfo.layout = pipelineLayout;
+
+    VK_CHECK_RESULT(vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1, &rayPipelineInfo, nullptr, &pipelines.RTX));
+}
+
+void CG::EngineImpl::CreateRTXDescriptorSets()
+{
+    std::vector<VkDescriptorPoolSize> poolSizes = {
+        { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 1 },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
     };
+    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, 1);
+    VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolCreateInfo, nullptr, &descriptorPool));
 
-    // Vertex input state
-    VkVertexInputBindingDescription vertexInputBinding = Vk::Initializers::VertexInputBindingDescription(0, vertexLayout.Stride(), VK_VERTEX_INPUT_RATE_VERTEX);
-    VkVertexInputAttributeDescription vertexInputAttribute = Vk::Initializers::VertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0);
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxSampleLayout, 1);
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxSample));
 
-    VkPipelineVertexInputStateCreateInfo vertexInputState = Vk::Initializers::PipelineVertexInputStateCreateInfo();
-    vertexInputState.vertexBindingDescriptionCount = 1;
-    vertexInputState.pVertexBindingDescriptions = &vertexInputBinding;
-    vertexInputState.vertexAttributeDescriptionCount = 1;
-    vertexInputState.pVertexAttributeDescriptions = &vertexInputAttribute;
+    VkWriteDescriptorSetAccelerationStructureNV descriptorAccelerationStructureInfo{};
+    descriptorAccelerationStructureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_NV;
+    descriptorAccelerationStructureInfo.accelerationStructureCount = 1;
+    descriptorAccelerationStructureInfo.pAccelerationStructures = &topLevelAS.accelerationStructure;
 
-    std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages;
+    VkWriteDescriptorSet accelerationStructureWrite{};
+    accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    // The specialized acceleration structure descriptor has to be chained
+    accelerationStructureWrite.pNext = &descriptorAccelerationStructureInfo;
+    accelerationStructureWrite.dstSet = descriptorSets.rtxSample;
+    accelerationStructureWrite.dstBinding = 0;
+    accelerationStructureWrite.descriptorCount = 1;
+    accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
 
-    VkGraphicsPipelineCreateInfo pipelineCI = Vk::Initializers::PipelineCreateInfo(pipelinelayout, renderpass);
-    pipelineCI.pInputAssemblyState = &inputAssemblyState;
-    pipelineCI.pRasterizationState = &rasterizationState;
-    pipelineCI.pColorBlendState = &colorBlendState;
-    pipelineCI.pMultisampleState = &multisampleState;
-    pipelineCI.pViewportState = &viewportState;
-    pipelineCI.pDepthStencilState = &depthStencilState;
-    pipelineCI.pDynamicState = &dynamicState;
-    pipelineCI.stageCount = 2;
-    pipelineCI.pStages = shaderStages.data();
-    pipelineCI.pVertexInputState = &vertexInputState;
-    pipelineCI.renderPass = renderpass;
+    VkDescriptorImageInfo storageImageDescriptor{};
+    storageImageDescriptor.imageView = storageImage.view;
+    storageImageDescriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-    shaderStages[0] = LoadShader(GetAssetPath() + "shaders/compiled/filter.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    shaderStages[1] = LoadShader(GetAssetPath() + "shaders/compiled/irradianceFilter.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-    VkPipeline pipeline;
-    VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
+    VkWriteDescriptorSet resultImageWrite = Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxSample, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &storageImageDescriptor);
+    VkWriteDescriptorSet uniformBufferWrite = Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxSample, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &sceneUbo.descriptor);
 
-    // Render
-    VkClearValue clearValues[1];
-    clearValues[0].color = { { 0.0f, 0.0f, 0.2f, 0.0f } };
-
-    VkRenderPassBeginInfo renderPassBeginInfo = Vk::Initializers::RenderPassBeginInfo();
-    // Reuse render pass from example pass
-    renderPassBeginInfo.renderPass = renderpass;
-    renderPassBeginInfo.framebuffer = offscreen.framebuffer;
-    renderPassBeginInfo.renderArea.extent.width = dim;
-    renderPassBeginInfo.renderArea.extent.height = dim;
-    renderPassBeginInfo.clearValueCount = 1;
-    renderPassBeginInfo.pClearValues = clearValues;
-
-    std::vector<glm::mat4> matrices = {
-        // POSITIVE_X
-        glm::rotate(glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        // NEGATIVE_X
-        glm::rotate(glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f)), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        // POSITIVE_Y
-        glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        // NEGATIVE_Y
-        glm::rotate(glm::mat4(1.0f), glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        // POSITIVE_Z
-        glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)),
-        // NEGATIVE_Z
-        glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)),
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+        accelerationStructureWrite,
+        resultImageWrite,
+        uniformBufferWrite,
     };
+    vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
+}
 
-    VkCommandBuffer cmdBuf = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
+{
+    const VkImageSubresourceRange subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
 
-    VkViewport viewport = Vk::Initializers::Viewport((float)dim, (float)dim, 0.0f, 1.0f);
-    VkRect2D scissor = Vk::Initializers::Rect2D(dim, dim, 0, 0);
+    vkCmdBindPipeline(drawCmdBuffers[swapChainImageIndex], VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelines.RTX);
+    vkCmdBindDescriptorSets(drawCmdBuffers[swapChainImageIndex], VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelineLayout, 0, 1, &descriptorSets.rtxSample, 0, 0);
 
-    vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-    vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
+    VkDeviceSize bindingOffsetRayGenShader = rayTracingProperties.shaderGroupHandleSize * kIndexRaygen;
+    VkDeviceSize bindingOffsetMissShader = rayTracingProperties.shaderGroupHandleSize * kIndexMiss;
+    VkDeviceSize bindingOffsetHitShader = rayTracingProperties.shaderGroupHandleSize * kIndexClosestHit;
+    VkDeviceSize bindingStride = rayTracingProperties.shaderGroupHandleSize;
 
-    VkImageSubresourceRange subresourceRange = {};
-    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    subresourceRange.baseMipLevel = 0;
-    subresourceRange.levelCount = numMips;
-    subresourceRange.layerCount = 6;
+    vkCmdTraceRaysNV(drawCmdBuffers[swapChainImageIndex],
+        shaderBindingTable.buffer, bindingOffsetRayGenShader,
+        shaderBindingTable.buffer, bindingOffsetMissShader, bindingStride,
+        shaderBindingTable.buffer, bindingOffsetHitShader, bindingStride,
+        VK_NULL_HANDLE, 0, 0,
+        engineConfig.width, engineConfig.height, 1);
 
-    // Change image layout for all cubemap faces to transfer destination
+    // Prepare current swapchain image as transfer destination
     Vk::Utils::SetImageLayout(
-        cmdBuf,
-        textures.irradianceCube.image,
+        drawCmdBuffers[swapChainImageIndex],
+        vkSwapChain->images[swapChainImageIndex],
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         subresourceRange);
 
-    for (uint32_t m = 0; m < numMips; ++m) {
-        for (uint32_t f = 0; f < 6; ++f) {
-            viewport.width = static_cast<float>(dim * std::pow(0.5f, m));
-            viewport.height = static_cast<float>(dim * std::pow(0.5f, m));
-            vkCmdSetViewport(cmdBuf, 0, 1, &viewport);
-
-            // Render scene from cube face's point of view
-            vkCmdBeginRenderPass(cmdBuf, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-            // Update shader push constant block
-            pushBlock.mvp = glm::perspective((float)(M_PI / 2.0), 1.0f, 0.1f, 512.0f) * matrices[f];
-
-            vkCmdPushConstants(cmdBuf, pipelinelayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushBlock), &pushBlock);
-
-            vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-            vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinelayout, 0, 1, &descriptorset, 0, NULL);
-
-            VkDeviceSize offsets[1] = { 0 };
-
-            vkCmdBindVertexBuffers(cmdBuf, 0, 1, &testSkybox->vertices.buffer, offsets);
-            vkCmdDraw(cmdBuf, testSkybox->vertexCount, 1, 0, 0);
-
-            vkCmdEndRenderPass(cmdBuf);
-
-            Vk::Utils::SetImageLayout(
-                cmdBuf,
-                offscreen.image,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-
-            // Copy region for transfer from framebuffer to cube face
-            VkImageCopy copyRegion = {};
-
-            copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            copyRegion.srcSubresource.baseArrayLayer = 0;
-            copyRegion.srcSubresource.mipLevel = 0;
-            copyRegion.srcSubresource.layerCount = 1;
-            copyRegion.srcOffset = { 0, 0, 0 };
-
-            copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            copyRegion.dstSubresource.baseArrayLayer = f;
-            copyRegion.dstSubresource.mipLevel = m;
-            copyRegion.dstSubresource.layerCount = 1;
-            copyRegion.dstOffset = { 0, 0, 0 };
-
-            copyRegion.extent.width = static_cast<uint32_t>(viewport.width);
-            copyRegion.extent.height = static_cast<uint32_t>(viewport.height);
-            copyRegion.extent.depth = 1;
-
-            vkCmdCopyImage(
-                cmdBuf,
-                offscreen.image,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                textures.irradianceCube.image,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                1,
-                &copyRegion);
-
-            // Transform framebuffer color attachment back 
-            Vk::Utils::SetImageLayout(
-                cmdBuf,
-                offscreen.image,
-                VK_IMAGE_ASPECT_COLOR_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        }
-    }
-
+    // Prepare ray tracing output image as transfer source
     Vk::Utils::SetImageLayout(
-        cmdBuf,
-        textures.irradianceCube.image,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        drawCmdBuffers[swapChainImageIndex],
+        storageImage.image,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         subresourceRange);
 
-    vkDevice->FlushCommandBuffer(cmdBuf, queue);
+    VkImageCopy copyRegion{};
+    copyRegion.srcSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    copyRegion.srcOffset = { 0, 0, 0 };
+    copyRegion.dstSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 };
+    copyRegion.dstOffset = { 0, 0, 0 };
+    copyRegion.extent = { engineConfig.width, engineConfig.height, 1 };
+    vkCmdCopyImage(drawCmdBuffers[swapChainImageIndex], storageImage.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+        vkSwapChain->images[swapChainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-    // todo: cleanup
-    vkDestroyRenderPass(vkDevice->logicalDevice, renderpass, nullptr);
-    vkDestroyFramebuffer(vkDevice->logicalDevice, offscreen.framebuffer, nullptr);
-    vkFreeMemory(vkDevice->logicalDevice, offscreen.memory, nullptr);
-    vkDestroyImageView(vkDevice->logicalDevice, offscreen.view, nullptr);
-    vkDestroyImage(vkDevice->logicalDevice, offscreen.image, nullptr);
-    vkDestroyDescriptorPool(vkDevice->logicalDevice, descriptorpool, nullptr);
-    vkDestroyDescriptorSetLayout(vkDevice->logicalDevice, descriptorsetlayout, nullptr);
-    vkDestroyPipeline(vkDevice->logicalDevice, pipeline, nullptr);
-    vkDestroyPipelineLayout(vkDevice->logicalDevice, pipelinelayout, nullptr);
+    // Transition swap chain image back for presentation
+    Vk::Utils::SetImageLayout(
+        drawCmdBuffers[swapChainImageIndex],
+        vkSwapChain->images[swapChainImageIndex],
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        subresourceRange);
 
-    auto tEnd = std::chrono::high_resolution_clock::now();
-    auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-    std::cout << "Generating irradiance cube with " << numMips << " mip levels took " << tDiff << " ms" << std::endl;
+    // Transition ray tracing output image back to general layout
+    Vk::Utils::SetImageLayout(
+        drawCmdBuffers[swapChainImageIndex],
+        storageImage.image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL,
+        subresourceRange);
 }

@@ -353,7 +353,6 @@ bool CG::Engine::CreateDevices()
 		}
 	}
 
-    std::vector<const char*> enabledDeviceExtensions;
 	void* deviceCreatepNextChain = nullptr;
 
 	vkPhysicalDevice = physicalDevices[selectedDevice];
@@ -504,72 +503,44 @@ void CG::Engine::SetupDepthStencil()
 
 void CG::Engine::SetupRenderPass()
 {
-	sampleCount = vkDevice->GetMaxUsableSampleCount();
+    std::array<VkAttachmentDescription, 2> attachments = {};
 
-    std::array<VkAttachmentDescription, 4> attachments = {};
-
-    // Multisampled attachment that we render to
     attachments[0].format = vkSwapChain->colorFormat;
-    attachments[0].samples = sampleCount;
-    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+    attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachments[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachments[0].initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachments[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    // This is the frame buffer attachment to where the multisampled image
-    // will be resolved to and which will be presented to the swapchain
-    attachments[1].format = vkSwapChain->colorFormat;
+    attachments[1].format = vkDevice->depthFormat;
     attachments[1].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachments[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     attachments[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[1].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-    // Multisampled depth attachment we render to
-    attachments[2].format = vkDevice->depthFormat;
-    attachments[2].samples = sampleCount;
-    attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachments[2].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[2].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[2].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[2].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[2].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    // Depth resolve attachment
-    attachments[3].format = vkDevice->depthFormat;
-    attachments[3].samples = VK_SAMPLE_COUNT_1_BIT;
-    attachments[3].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[3].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachments[3].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachments[3].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachments[3].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    attachments[3].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
+    attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference colorReference = {};
     colorReference.attachment = 0;
-    colorReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorReference.layout = VK_IMAGE_LAYOUT_GENERAL;
 
     VkAttachmentReference depthReference = {};
-    depthReference.attachment = 2;
+    depthReference.attachment = 1;
     depthReference.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    // Resolve attachment reference for the color attachment
-    VkAttachmentReference resolveReference = {};
-    resolveReference.attachment = 1;
-    resolveReference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colorReference;
-    // Pass our resolve attachments to the sub pass
-    subpass.pResolveAttachments = &resolveReference;
-    subpass.pDepthStencilAttachment = &depthReference;
+    VkSubpassDescription subpassDescription = {};
+    subpassDescription.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpassDescription.colorAttachmentCount = 1;
+    subpassDescription.pColorAttachments = &colorReference;
+    subpassDescription.pDepthStencilAttachment = &depthReference;
+    subpassDescription.inputAttachmentCount = 0;
+    subpassDescription.pInputAttachments = nullptr;
+    subpassDescription.preserveAttachmentCount = 0;
+    subpassDescription.pPreserveAttachments = nullptr;
+    subpassDescription.pResolveAttachments = nullptr;
 
     std::array<VkSubpassDependency, 2> dependencies;
 
@@ -589,12 +560,13 @@ void CG::Engine::SetupRenderPass()
     dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
     dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-    VkRenderPassCreateInfo renderPassInfo = Vk::Initializers::RenderPassCreateInfo();
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
     renderPassInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
     renderPassInfo.pAttachments = attachments.data();
     renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 2;
+    renderPassInfo.pSubpasses = &subpassDescription;
+    renderPassInfo.dependencyCount = static_cast<uint32_t>(dependencies.size());
     renderPassInfo.pDependencies = dependencies.data();
 
     VK_CHECK_RESULT(vkCreateRenderPass(vkDevice->logicalDevice, &renderPassInfo, nullptr, &renderPass));
@@ -609,14 +581,11 @@ void CG::Engine::CreatePipelineCache()
 
 void CG::Engine::SetupFrameBuffer()
 {
-	SetupMultisampleTarget();
+	// SetupMultisampleTarget();
 
-	std::array<VkImageView, 4> attachments;
+	std::array<VkImageView, 2> attachments;
 
-    attachments[0] = multisampleTarget.color.view;
-    // attachment[1] = swapchain image
-    attachments[2] = multisampleTarget.depth.view;
-    attachments[3] = depthStencil.view;
+    attachments[1] = depthStencil.view;
 
 	VkFramebufferCreateInfo frameBufferCreateInfo = {};
 	frameBufferCreateInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -632,7 +601,7 @@ void CG::Engine::SetupFrameBuffer()
 	frameBuffers.resize(vkSwapChain->imageCount);
 	for (uint32_t i = 0; i < frameBuffers.size(); i++)
 	{
-		attachments[1] = vkSwapChain->buffers[i].view;
+		attachments[0] = vkSwapChain->buffers[i].view;
 		VK_CHECK_RESULT(vkCreateFramebuffer(vkDevice->logicalDevice, &frameBufferCreateInfo, nullptr, &frameBuffers[i]));
 	}
 }
@@ -665,29 +634,6 @@ void CG::Engine::SubmitFrame()
 	}
 
 	VK_CHECK_RESULT(vkQueueWaitIdle(queue));
-}
-
-VkGeometryNV CG::Engine::ObjectToVkGeometryNV(const ObjModel& model)
-{
-	VkGeometryTrianglesNV triangles;
-
-	triangles.vertexData = model.vertexBuffer.buffer;
-	triangles.vertexOffset = 0;  // Start at the beginning of the buffer
-	triangles.vertexCount = model.nbVertices;
-	triangles.vertexStride = sizeof(Vertex);
-	triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-	triangles.indexData = model.indexBuffer.buffer;
-	triangles.indexOffset = 0;
-	triangles.indexCount = model.nbIndices;
-	triangles.indexType = VK_INDEX_TYPE_UINT32;  // 32-bit indices
-
-	VkGeometryDataNV geoData;
-	geoData.triangles = triangles;
-	VkGeometryNV geometry;
-	geometry.geometry = geoData;
-	// Consider the geometry opaque for optimization
-	geometry.flags = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-	return geometry;
 }
 
 void CG::Engine::InitRayTracing()
@@ -731,6 +677,10 @@ bool CG::Engine::CreateVkInstance()
 	extensionNames.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 	layerNames = validationLayers;
 #endif
+
+    for (auto enabledExtension : enabledInstanceExtensions) {
+		extensionNames.push_back(enabledExtension);
+    }
 
 	VkInstanceCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;

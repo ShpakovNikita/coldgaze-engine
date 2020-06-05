@@ -4,6 +4,7 @@
 #include "vulkan\vulkan_core.h"
 
 #define ENABLE_VULKAN_VALIDATION 1
+#define ENABLE_VULKAN_RTX 1
 
 namespace CG
 {

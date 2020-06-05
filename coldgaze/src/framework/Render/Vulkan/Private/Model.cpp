@@ -68,10 +68,6 @@ CG::Vk::GLTFModel::~GLTFModel()
     {
         texture.texture.Destroy();
     }
-
-	vertices.Destroy();
-	indices.buffer.Destroy();
-	indices.count = 0;
 }
 
 void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*= 1.0f*/)
@@ -94,7 +90,7 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*
         const tinygltf::Scene& scene = glTFInput.scenes[glTFInput.defaultScene > -1 ? glTFInput.defaultScene : 0];
         for (size_t i = 0; i < scene.nodes.size(); i++) {
             const tinygltf::Node node = glTFInput.nodes[scene.nodes[i]];
-            LoadNode(nullptr, node, scene.nodes[i], glTFInput, indexBuffer, vertexBuffer, scale);
+            LoadNode(nullptr, node, scene.nodes[i], glTFInput, scale);
         }
 
         LoadAnimations(glTFInput);
@@ -119,62 +115,6 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*
 	}
 
     extensions = glTFInput.extensionsUsed;
-
-	size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
-	size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
-	indices.count = static_cast<uint32_t>(indexBuffer.size());
-
-	// We are creating this buffers to copy them on local memory for better performance
-	Buffer vertexStaging, indexStaging;
-
-	VK_CHECK_RESULT(vkDevice->CreateBuffer(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&vertexStaging,
-		vertexBufferSize,
-		vertexBuffer.data()));
-
-	VK_CHECK_RESULT(vkDevice->CreateBuffer(
-		VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&indexStaging,
-		indexBufferSize,
-		indexBuffer.data()));
-
-	VK_CHECK_RESULT(vkDevice->CreateBuffer(
-		VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		&vertices,
-		vertexBufferSize));
-	VK_CHECK_RESULT(vkDevice->CreateBuffer(
-		VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		&indices.buffer,
-		indexBufferSize));
-
-	VkCommandBuffer copyCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-	VkBufferCopy copyRegion = {};
-
-	copyRegion.size = vertexBufferSize;
-	vkCmdCopyBuffer(
-		copyCmd,
-		vertexStaging.buffer,
-		vertices.buffer,
-		1,
-		&copyRegion);
-
-	copyRegion.size = indexBufferSize;
-	vkCmdCopyBuffer(
-		copyCmd,
-		indexStaging.buffer,
-		indices.buffer.buffer,
-		1,
-		&copyRegion);
-
-	vkDevice->FlushCommandBuffer(copyCmd, queue, true);
-
-	vertexStaging.Destroy();
-	indexStaging.Destroy();
 }
 
 std::vector<CG::Vk::GLTFModel::Material>& CG::Vk::GLTFModel::GetMaterials()
@@ -199,9 +139,9 @@ const std::vector<CG::Vk::GLTFModel::Node*>& CG::Vk::GLTFModel::GetFlatNodes() c
 
 void CG::Vk::GLTFModel::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 {
-	VkDeviceSize offsets[1] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+	// VkDeviceSize offsets[1] = { 0 };
+	// vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer.buffer, offsets);
+	// vkCmdBindIndexBuffer(commandBuffer, indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
 	// Render all nodes at top-level
 	for (auto& node : nodes) 
 	{
@@ -227,6 +167,20 @@ void CG::Vk::GLTFModel::SetLoaded(bool aLoaded)
 const glm::vec3& CG::Vk::GLTFModel::GetSize() const
 {
     return size;
+}
+
+const uint32_t CG::Vk::GLTFModel::GetPrimitivesCount()
+{
+    uint32_t primCount = 0;
+    for (const auto& node : allNodes)
+    {
+        if (node->mesh)
+        {
+            primCount += static_cast<uint32_t>(node->mesh->primitives.size());
+        }
+    }
+
+    return primCount;
 }
 
 // from GLTF2 specs
@@ -521,8 +475,70 @@ void CG::Vk::GLTFModel::CalculateSize()
     size = glm::vec3(dimension.max[0] - dimension.min[0], dimension.max[1] - dimension.min[1], dimension.max[2] - dimension.min[2]);
 }
 
+void CG::Vk::GLTFModel::CreatePrimitiveBuffers(Primitive* newPrimitive, std::vector<Vertex>& vertexBuffer,
+    std::vector<uint32_t>& indexBuffer)
+{
+
+    size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
+    size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
+    newPrimitive->indexCount = static_cast<uint32_t>(indexBuffer.size());
+    newPrimitive->vertexCount = static_cast<uint32_t>(vertexBuffer.size());
+
+    // We are creating this buffers to copy them on local memory for better performance
+    Buffer vertexStaging, indexStaging;
+
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &vertexStaging,
+        vertexBufferSize,
+        vertexBuffer.data()));
+
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &indexStaging,
+        indexBufferSize,
+        indexBuffer.data()));
+
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &newPrimitive->vertices,
+        vertexBufferSize));
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &newPrimitive->indices,
+        indexBufferSize));
+
+    VkCommandBuffer copyCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+    VkBufferCopy copyRegion = {};
+
+    copyRegion.size = vertexBufferSize;
+    vkCmdCopyBuffer(
+        copyCmd,
+        vertexStaging.buffer,
+        newPrimitive->vertices.buffer,
+        1,
+        &copyRegion);
+
+    copyRegion.size = indexBufferSize;
+    vkCmdCopyBuffer(
+        copyCmd,
+        indexStaging.buffer,
+        newPrimitive->indices.buffer,
+        1,
+        &copyRegion);
+
+    vkDevice->FlushCommandBuffer(copyCmd, queue, true);
+
+    vertexStaging.Destroy();
+    indexStaging.Destroy();
+}
+
 void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, 
-    const tinygltf::Model& input, std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale)
+    const tinygltf::Model& input, float globalscale)
 {
     std::unique_ptr<Node> newNode = std::make_unique<Node>();
     newNode->index = nodeIndex;
@@ -554,7 +570,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
     // Node with children
     if (node.children.size() > 0) {
         for (size_t i = 0; i < node.children.size(); i++) {
-            LoadNode(newNode.get(), input.nodes[node.children[i]], node.children[i], input, indexBuffer, vertexBuffer, globalscale);
+            LoadNode(newNode.get(), input.nodes[node.children[i]], node.children[i], input, globalscale);
         }
     }
 
@@ -564,8 +580,14 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
         std::unique_ptr<Mesh> newMesh = std::make_unique<Mesh>(vkDevice, newNode->matrix);
         for (size_t j = 0; j < mesh.primitives.size(); j++) {
             const tinygltf::Primitive& primitive = mesh.primitives[j];
-            uint32_t indexStart = static_cast<uint32_t>(indexBuffer.size());
-            uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
+
+            std::vector<uint32_t> indexBuffer;
+            indexBuffer.reserve(4096);
+            std::vector<Vertex> vertexBuffer;
+            vertexBuffer.reserve(4096);
+
+            uint32_t indexStart = 0;
+            uint32_t vertexStart = 0;
             uint32_t indexCount = 0;
             uint32_t vertexCount = 0;
             bool hasSkin = false;
@@ -695,9 +717,12 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
             }
 
             // loading last material as default one
-            std::unique_ptr<Primitive> newPrimitive = std::make_unique<Primitive>(indexStart, indexCount, vertexCount, 
+            std::unique_ptr<Primitive> newPrimitive = std::make_unique<Primitive>(indexStart, vertexStart, indexCount, vertexCount, 
                 primitive.material > -1 ? materials[primitive.material] : materials.back());
             newPrimitive->bbox = AABBox(posMin, posMax);
+
+            CreatePrimitiveBuffers(newPrimitive.get(), vertexBuffer, indexBuffer);
+
             newMesh->primitives.push_back(std::move(newPrimitive));
         }
 

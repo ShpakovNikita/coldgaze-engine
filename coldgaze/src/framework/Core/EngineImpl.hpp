@@ -41,6 +41,26 @@ namespace CG
 		void CaptureEvent(const SDL_Event& event) override;
 
     private:
+        struct AccelerationStructure {
+            VkDeviceMemory memory;
+            VkAccelerationStructureNV accelerationStructure;
+            glm::mat4 transform;
+            uint64_t handle;
+        };
+
+        AccelerationStructure topLevelAS;
+
+        std::vector<AccelerationStructure> blasData;
+
+        struct GeometryInstance {
+            glm::mat3x4 transform;
+            uint32_t instanceId : 24;
+            uint32_t mask : 8;
+            uint32_t instanceOffset : 24;
+            uint32_t flags : 8;
+            uint64_t accelerationStructureHandle;
+        };
+
 		struct UISettings {
 			std::array<float, 50> frameTimes{};
 			float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
@@ -65,6 +85,7 @@ namespace CG
             glm::mat4 projection;
             glm::mat4 model;
             glm::mat4 view;
+			glm::vec4 cameraPos;
 
             std::array<glm::vec4, 6> lightPosPushConstants;
             std::array<glm::vec4, 6> lightColorPushConstants;
@@ -77,10 +98,12 @@ namespace CG
 			VkDescriptorSetLayout scene;
 			VkDescriptorSetLayout material;
 			VkDescriptorSetLayout node;
+			VkDescriptorSetLayout rtxSampleLayout;
 		} descriptorSetLayouts = {};
 
         struct DescriptorSets {
             VkDescriptorSet scene;
+            VkDescriptorSet rtxSample;
         } descriptorSets = {};
 
 		struct RenderPipelines
@@ -88,6 +111,7 @@ namespace CG
 			VkPipeline wireframe;
 			VkPipeline solidPBR_MSAA;
 			VkPipeline solidPBR_MSAA_AlphaBlend;
+			VkPipeline RTX;
 		} pipelines = {};
 
 		struct Textures
@@ -138,17 +162,49 @@ namespace CG
 		void RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk::GLTFModel::Material::eAlphaMode alphaMode);
 		void SetupNodeDescriptorSet(Vk::GLTFModel::Node* node);
 
-		void GenerateIrradianceSampler();
+		void CreateBottomLevelAccelerationStructure(const VkGeometryNV* geometries, uint32_t blasIndex, size_t geomCount);
+		void CreateTopLevelAccelerationStructure();
+
+		void LoadNVRayTracingProcs();
+		void CreateNVRayTracingGeometry();
+		void CreateNVRayTracingStoreImage();
+        void CreateShaderBindingTable();
+        VkDeviceSize CopyShaderIdentifier(uint8_t* data, const uint8_t* shaderHandleStorage, uint32_t groupIndex);
+        void CreateRTXPipeline();
+        void CreateRTXDescriptorSets();
+        void DrawRayTracingData(uint32_t swapChainImageIndex);
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
 		VkPipelineLayout pipelineLayout = {};
-		VkDescriptorSet descriptorSet = {};
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		Vk::Texture2D emptyTexture;
 
 		std::unique_ptr<Vk::GLTFModel> testScene;
 		std::unique_ptr<Vk::SkyBox> testSkybox;
+
+        Vk::Buffer shaderBindingTable;
+
+        PFN_vkCreateAccelerationStructureNV vkCreateAccelerationStructureNV;
+        PFN_vkDestroyAccelerationStructureNV vkDestroyAccelerationStructureNV;
+        PFN_vkBindAccelerationStructureMemoryNV vkBindAccelerationStructureMemoryNV;
+        PFN_vkGetAccelerationStructureHandleNV vkGetAccelerationStructureHandleNV;
+        PFN_vkGetAccelerationStructureMemoryRequirementsNV vkGetAccelerationStructureMemoryRequirementsNV;
+        PFN_vkCmdBuildAccelerationStructureNV vkCmdBuildAccelerationStructureNV;
+        PFN_vkCreateRayTracingPipelinesNV vkCreateRayTracingPipelinesNV;
+        PFN_vkGetRayTracingShaderGroupHandlesNV vkGetRayTracingShaderGroupHandlesNV;
+        PFN_vkCmdTraceRaysNV vkCmdTraceRaysNV;
+
+        struct StorageImage {
+            VkDeviceMemory memory;
+            VkImage image;
+            VkImageView view;
+            VkFormat format;
+        } storageImage;
+
+        // TODO: remove
+        Vk::Buffer vertexBuffer;
+        Vk::Buffer indexBuffer;
     };
 }

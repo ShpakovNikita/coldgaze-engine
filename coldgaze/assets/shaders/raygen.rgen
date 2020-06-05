@@ -1,0 +1,42 @@
+#version 460
+#extension GL_NV_ray_tracing : require
+
+#define LIGHTS_COUNT 6
+
+layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
+layout(binding = 1, set = 0, rgba8) uniform image2D image;
+layout(binding = 2, set = 0) uniform UBOScene
+{
+	mat4 projection;
+	mat4 model;
+	mat4 view;
+    vec4 cameraPos;
+    
+    // vec4 because of alignment
+    vec4 lightPos[LIGHTS_COUNT];
+    vec4 lightColor[LIGHTS_COUNT];
+} uboScene;
+
+layout(location = 0) rayPayloadNV vec3 hitValue;
+
+void main() 
+{
+	const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
+	const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeNV.xy);
+	vec2 d = inUV * 2.0 - 1.0;
+
+    mat4 viewInv = inverse(uboScene.view);
+	vec4 origin = viewInv * vec4(0,0,0,1);
+	vec4 target = inverse(uboScene.projection) * vec4(d.x, d.y, 1, 1);
+	vec4 direction = viewInv * vec4(normalize(target.xyz), 0);
+
+	uint rayFlags = gl_RayFlagsOpaqueNV;
+	uint cullMask = 0xff;
+	float tmin = 0.001;
+	float tmax = 10000.0;
+
+	traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+
+    ivec2 storePos = ivec2(gl_LaunchIDNV.x, gl_LaunchSizeNV.y - gl_LaunchIDNV.y);
+	imageStore(image, storePos, vec4(hitValue, 0.0));
+}

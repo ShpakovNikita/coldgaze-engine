@@ -66,15 +66,6 @@ namespace CG
 			Device* vkDevice = nullptr;
 			VkQueue queue;
 
-			// Single vertex buffer for all primitives
-			Buffer vertices = {};
-
-			// Single index buffer for all primitives
-			struct {
-				int count;
-				Buffer buffer;
-			} indices = {};
-
             struct Texture {
 				void FromGLTFImage(const tinygltf::Image& gltfimage, TextureSampler textureSampler, Device* device, VkQueue copyQueue);
 
@@ -119,8 +110,16 @@ namespace CG
 			// A primitive contains the data for a single draw call
 			struct Primitive {
 				uint32_t firstIndex = 0;
+				uint32_t firstVertex = 0;
 				uint32_t indexCount = 0;
 				uint32_t vertexCount = 0;
+
+                // Single vertex buffer for all primitives
+				Buffer vertices = {};
+
+                // Single index buffer for all primitives
+                Buffer indices = {};
+
 				Material &material;
 				bool hasIndices;
 
@@ -128,9 +127,10 @@ namespace CG
 
                 Primitive(
 					uint32_t firstIndex,
+					uint32_t firstVertex,
                     uint32_t indexCount,
                     uint32_t vertexCount, 
-					Material& material) : firstIndex(firstIndex), indexCount(indexCount), vertexCount(vertexCount), material(material) {
+					Material& material) : firstIndex(firstIndex), firstVertex(firstVertex), indexCount(indexCount), vertexCount(vertexCount), material(material) {
                     hasIndices = indexCount > 0;
                 };
 			};
@@ -236,6 +236,7 @@ namespace CG
 			void SetLoaded(bool loaded);
 
 			const glm::vec3& GetSize() const;
+			const uint32_t GetPrimitivesCount();
 
 		private:
 			static VkSamplerAddressMode GetVkWrapMode(int32_t wrapMode);
@@ -249,8 +250,11 @@ namespace CG
 
 			void CalculateSize();
 
+			void CreatePrimitiveBuffers(Primitive* newPrimitive, std::vector<Vertex>& vertexBuffer, 
+				std::vector<uint32_t>& indexBuffer);
+
 			void LoadNode(Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, const tinygltf::Model& input,
-				std::vector<uint32_t>& indexBuffer, std::vector<Vertex>& vertexBuffer, float globalscale);
+				float globalscale);
 
 			/*
 				Model data

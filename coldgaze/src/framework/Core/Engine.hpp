@@ -55,14 +55,6 @@ namespace CG
 		const std::string GetAssetPath() const;
 
 	protected:
-		struct ObjModel
-		{
-			uint32_t nbIndices { 0 };
-			uint32_t nbVertices { 0 };
-			Vk::Buffer vertexBuffer;
-			Vk::Buffer indexBuffer;
-		};
-
         virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures() const;
         virtual void RenderFrame(float deltaTime);
         virtual void Prepare();
@@ -122,13 +114,13 @@ namespace CG
 		std::unique_ptr<InputHandler> inputHandler;
 		std::unique_ptr<Window> currentWindow;
 
-		// TODO: refactor to private
-		VkGeometryNV ObjectToVkGeometryNV(const ObjModel& model);
-
 		void InitRayTracing();
 		VkPhysicalDeviceRayTracingPropertiesNV rayTracingProperties;
 
 		CameraComponent* cameraComponent = nullptr;
+
+		std::vector<const char*> enabledInstanceExtensions;
+        std::vector<const char*> enabledDeviceExtensions;
 
     private:
         struct {

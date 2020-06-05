@@ -15,6 +15,7 @@ endif()
 
 # Setting up tools
 if(WIN32)
+    set(GLSLVALIDATOR_TOOL ${TOOLS_PATH}/glslangValidator.exe)
     set(GLSLC_TOOL ${TOOLS_PATH}/glslc.exe)
 endif()
 

@@ -37,6 +37,13 @@ namespace CG
 				return imageCreateInfo;
 			}
 
+            inline VkMemoryBarrier CreateMemoryBarrier()
+            {
+                VkMemoryBarrier memoryBarrier{};
+                memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+                return memoryBarrier;
+            }
+
 			inline VkMemoryAllocateInfo MemoryAllocateInfo()
 			{
 				VkMemoryAllocateInfo memAllocInfo{};

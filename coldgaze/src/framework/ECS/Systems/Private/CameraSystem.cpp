@@ -68,7 +68,7 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 	{
 		if (handled)
 		{
-			UpdateMousePos(component, -event.motion.x, event.motion.y);
+			UpdateMousePos(component, -event.motion.x, -event.motion.y);
 		}
 	}
 	break;
@@ -81,10 +81,10 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			{
 			case SDL_BUTTON_LEFT:
 				component.input.leftMouse = true;
-				UpdateMousePos(component, -event.button.x, event.button.y);
+				UpdateMousePos(component, -event.button.x, -event.button.y);
             case SDL_BUTTON_RIGHT:
                 component.input.rightMouse = true;
-                UpdateMousePos(component, -event.button.x, event.button.y);
+                UpdateMousePos(component, -event.button.x, -event.button.y);
 			default:
 				break;
 			}
@@ -100,10 +100,10 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
 			{
 			case SDL_BUTTON_LEFT:
 				component.input.leftMouse = false;
-				UpdateMousePos(component, -event.button.x, event.button.y);
+				UpdateMousePos(component, -event.button.x, -event.button.y);
             case SDL_BUTTON_RIGHT:
                 component.input.rightMouse = false;
-                UpdateMousePos(component, -event.button.x, event.button.y);
+                UpdateMousePos(component, -event.button.x, -event.button.y);
 			default:
 				break;
 			}
