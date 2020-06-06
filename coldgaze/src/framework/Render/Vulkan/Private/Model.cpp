@@ -310,6 +310,59 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
             material.emissiveFactor = glm::vec4(0.0f);
         }
 
+        Material::MaterialParams materialParams;
+
+        materialParams.baseColorFactor = material.baseColorFactor;
+        materialParams.metallicFactor = material.metallicFactor;
+        materialParams.roughnessFactor = material.roughnessFactor;
+        materialParams.emissiveFactor = material.emissiveFactor;
+
+        // Notice: this value used in shader
+        materialParams.workflow = 0.0f;
+
+        materialParams.colorTextureSet = material.baseColorTexture != nullptr ? material.texCoordSets.baseColor : -1;
+        materialParams.physicalDescriptorTextureSet = material.metallicRoughnessTexture != nullptr ? material.texCoordSets.metallicRoughness : -1;
+        materialParams.normalTextureSet = material.normalTexture != nullptr ? material.texCoordSets.normal : -1;
+        materialParams.occlusionTextureSet = material.occlusionTexture != nullptr ? material.texCoordSets.occlusion : -1;
+        materialParams.emissiveTextureSet = material.emissiveTexture != nullptr ? material.texCoordSets.emissive : -1;
+
+        materialParams.baseColorFactor = material.baseColorFactor;
+        materialParams.metallicFactor = material.metallicFactor;
+        materialParams.roughnessFactor = material.roughnessFactor;
+        materialParams.alphaMaskCutoff = material.alphaCutoff;
+
+        size_t materialBufferSize = sizeof(Material::MaterialParams);
+
+        // We are creating this buffers to copy them on local memory for better performance
+        Buffer materialStaging;
+
+        VK_CHECK_RESULT(vkDevice->CreateBuffer(
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            &materialStaging,
+            materialBufferSize,
+            &materialParams));
+
+        VK_CHECK_RESULT(vkDevice->CreateBuffer(
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            &material.materialParams,
+            materialBufferSize));
+
+        VkCommandBuffer copyCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+        VkBufferCopy copyRegion = {};
+
+        copyRegion.size = materialBufferSize;
+        vkCmdCopyBuffer(
+            copyCmd,
+            materialStaging.buffer,
+            material.materialParams.buffer,
+            1,
+            &copyRegion);
+
+        vkDevice->FlushCommandBuffer(copyCmd, queue, true);
+        materialStaging.Destroy();
+
         materials.push_back(material);
     }
     // Push a default material at the end of the list for meshes with no material assigned
@@ -478,7 +531,6 @@ void CG::Vk::GLTFModel::CalculateSize()
 void CG::Vk::GLTFModel::CreatePrimitiveBuffers(Primitive* newPrimitive, std::vector<Vertex>& vertexBuffer,
     std::vector<uint32_t>& indexBuffer)
 {
-
     size_t vertexBufferSize = vertexBuffer.size() * sizeof(Vertex);
     size_t indexBufferSize = indexBuffer.size() * sizeof(uint32_t);
     newPrimitive->indexCount = static_cast<uint32_t>(indexBuffer.size());
@@ -665,9 +717,10 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
                 for (size_t v = 0; v < posAccessor.count; ++v) {
                     Vertex vert = {};
                     vert.pos = glm::vec4(glm::make_vec3(&bufferPos[v * posByteStride]), 1.0f);
-                    vert.normal = glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * normByteStride]) : glm::vec3(0.0f)));
-                    vert.uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * uv0ByteStride]) : glm::vec2(0.0f);
-                    vert.uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * uv1ByteStride]) : glm::vec2(0.0f);
+                    vert.normal = glm::vec4(glm::normalize(glm::vec3(bufferNormals ? glm::make_vec3(&bufferNormals[v * normByteStride]) : glm::vec3(0.0f))), 1.0f);
+                    glm::vec2 uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * uv0ByteStride]) : glm::vec2(0.0f);
+                    glm::vec2 uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * uv1ByteStride]) : glm::vec2(0.0f);
+                    vert.uv = glm::vec4(uv0.x, uv0.y, uv1.x, uv1.y);
 
                     /*
                     vert.joint0 = hasSkin ? glm::vec4(glm::make_vec4(&bufferJoints[v * jointByteStride])) : glm::vec4(0.0f);

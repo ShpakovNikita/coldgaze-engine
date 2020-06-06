@@ -55,10 +55,9 @@ namespace CG
             // The vertex layout for the model
             struct Vertex
             {
-                glm::vec3 pos;
-                glm::vec3 normal;
-                glm::vec2 uv0;
-                glm::vec2 uv1;
+                glm::vec4 pos;
+                glm::vec4 normal;
+                glm::vec4 uv; // xy = UV0, zw = UV1
                 // glm::vec4 joint0;
                 // glm::vec4 weight0;
             };
@@ -73,12 +72,31 @@ namespace CG
             };
 
             struct Material {
+                struct MaterialParams {
+                    glm::vec4 baseColorFactor;
+                    glm::vec4 emissiveFactor;
+                    glm::vec4 diffuseFactor;
+                    glm::vec4 specularFactor;
+                    float workflow;
+                    int colorTextureSet;
+                    int physicalDescriptorTextureSet;
+                    int normalTextureSet;
+                    int occlusionTextureSet;
+                    int emissiveTextureSet;
+                    float metallicFactor;
+                    float roughnessFactor;
+                    float alphaMask;
+                    float alphaMaskCutoff;
+                };
+				Buffer materialParams;
+
                 enum class eAlphaMode
 				{ 
 					kAlphaModeOpaque,
 					kAlphaModeMask, 
 					kAlphaModeBlend,
 				};
+
 				eAlphaMode alphaMode = eAlphaMode::kAlphaModeOpaque;
                 float alphaCutoff = 1.0f;
                 float metallicFactor = 1.0f;

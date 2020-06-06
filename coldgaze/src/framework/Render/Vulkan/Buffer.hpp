@@ -88,13 +88,7 @@ namespace CG
 				}
 			}
 
-            ~Buffer()
-            {
-				if (mapped)
-				{
-					Destroy();
-				}
-            }
+			~Buffer() = default;
 		};
 	}
 }

@@ -89,9 +89,6 @@ void CG::EngineImpl::Prepare()
     LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
     LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
-	PreparePipelines();
-
-
     // CreateNVRayTracingGeometry();
     CreateNVRayTracingStoreImage();
     CreateRTXDescriptorSets();
@@ -170,102 +167,6 @@ void CG::EngineImpl::FlushCommandBuffer(VkCommandBuffer commandBuffer)
 	assert(commandBuffer != VK_NULL_HANDLE); 
 
 	vkDevice->FlushCommandBuffer(commandBuffer, queue, true);
-}
-
-void CG::EngineImpl::PreparePipelines()
-{
-	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = Vk::Initializers::PipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
-	VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo = Vk::Initializers::PipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
-	VkPipelineColorBlendAttachmentState blendAttachmentStateCreateInfo = Vk::Initializers::PipelineColorBlendAttachmentState(
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT, VK_FALSE);
-	VkPipelineColorBlendStateCreateInfo colorBlendStateCreateInfo = Vk::Initializers::PipelineColorBlendStateCreateInfo(1, &blendAttachmentStateCreateInfo);
-	VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo = Vk::Initializers::PipelineDepthStencilStateCreateInfo(VK_TRUE, VK_TRUE, VK_COMPARE_OP_LESS_OR_EQUAL);
-	VkPipelineViewportStateCreateInfo viewportStateCreateInfo = Vk::Initializers::PipelineViewportStateCreateInfo(1, 1, 0);
-	VkPipelineMultisampleStateCreateInfo multisampleStateCreateInfo = Vk::Initializers::PipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT, 0);
-	const std::vector<VkDynamicState> dynamicStateEnables = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = Vk::Initializers::PipelineDynamicStateCreateInfo(dynamicStateEnables, 0);
-
-    // Pipeline layout
-    const std::vector<VkDescriptorSetLayout> setLayouts = {
-        descriptorSetLayouts.scene, descriptorSetLayouts.material, descriptorSetLayouts.node
-    };
-    VkPipelineLayoutCreateInfo pipelineLayoutCI = Vk::Initializers::PipelineLayoutCreateInfo(setLayouts);
-    VkPushConstantRange pushConstantRange = {};
-    pushConstantRange.size = sizeof(PushConstBlockMaterial);
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    pipelineLayoutCI.pushConstantRangeCount = 1;
-    pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
-    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCI, nullptr, &pipelineLayouts.pbrPipelineLayout));
-
-	const std::vector<VkVertexInputBindingDescription> vertexInputBindings = {
-		Vk::Initializers::VertexInputBindingDescription(0, sizeof(Vk::GLTFModel::Vertex), VK_VERTEX_INPUT_RATE_VERTEX),
-	};
-	const std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-		Vk::Initializers::VertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, pos)),
-		Vk::Initializers::VertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, normal)),		
-        Vk::Initializers::VertexInputAttributeDescription(0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, uv0)),
-        Vk::Initializers::VertexInputAttributeDescription(0, 3, VK_FORMAT_R32G32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, uv1)),
-        // Vk::Initializers::VertexInputAttributeDescription(0, 4, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, joint0)),
-        // Vk::Initializers::VertexInputAttributeDescription(0, 5, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, weight0)),
-	};
-
-	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = Vk::Initializers::PipelineVertexInputStateCreateInfo();
-	vertexInputStateCreateInfo.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexInputBindings.size());
-	vertexInputStateCreateInfo.pVertexBindingDescriptions = vertexInputBindings.data();
-	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertexInputAttributes.size());
-	vertexInputStateCreateInfo.pVertexAttributeDescriptions = vertexInputAttributes.data();
-
-	const std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {
-		LoadShader(GetAssetPath() + "shaders/compiled/glTF_PBR.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-		LoadShader(GetAssetPath() + "shaders/compiled/glTF_PBR.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-	};
-
-	VkGraphicsPipelineCreateInfo pipelineCreateInfo = Vk::Initializers::PipelineCreateInfo(pipelineLayouts.pbrPipelineLayout, renderPass, 0);
-	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
-	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
-	pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
-	pipelineCreateInfo.pColorBlendState = &colorBlendStateCreateInfo;
-	pipelineCreateInfo.pMultisampleState = &multisampleStateCreateInfo;
-	pipelineCreateInfo.pViewportState = &viewportStateCreateInfo;
-	pipelineCreateInfo.pDepthStencilState = &depthStencilStateCreateInfo;
-	pipelineCreateInfo.pDynamicState = &dynamicStateCreateInfo;
-	pipelineCreateInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-	pipelineCreateInfo.pStages = shaderStages.data();
-
-    // multisampleStateCreateInfo.rasterizationSamples = sampleCount;
-    // multisampleStateCreateInfo.sampleShadingEnable = VK_TRUE;
-    // multisampleStateCreateInfo.minSampleShading = 0.25f;
-
-	VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidPBR_MSAA));
-
-	// Wire frame rendering pipeline
-    if (vkDevice->enabledFeatures.fillModeNonSolid) {
-        VkPipelineRasterizationStateCreateInfo wireframeRasterizationCI = rasterizationStateCreateInfo;
-        wireframeRasterizationCI.polygonMode = VK_POLYGON_MODE_LINE;
-        wireframeRasterizationCI.lineWidth = 1.0f;
-        pipelineCreateInfo.pRasterizationState = &wireframeRasterizationCI;
-		VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.wireframe));
-        pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
-	}
-    else
-    {
-        pipelines.wireframe = pipelines.solidPBR_MSAA;
-    }
-
-    rasterizationStateCreateInfo.cullMode = VK_CULL_MODE_NONE;
-    blendAttachmentStateCreateInfo.blendEnable = VK_TRUE;
-    blendAttachmentStateCreateInfo.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    blendAttachmentStateCreateInfo.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    blendAttachmentStateCreateInfo.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    blendAttachmentStateCreateInfo.colorBlendOp = VK_BLEND_OP_ADD;
-    blendAttachmentStateCreateInfo.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    blendAttachmentStateCreateInfo.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-    blendAttachmentStateCreateInfo.alphaBlendOp = VK_BLEND_OP_ADD;
-    VK_CHECK_RESULT(vkCreateGraphicsPipelines(vkDevice->logicalDevice, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipelines.solidPBR_MSAA_AlphaBlend));
-
-    for (auto shaderStage : shaderStages) {
-        vkDestroyShaderModule(vkDevice->logicalDevice, shaderStage.module, nullptr);
-    }
 }
 
 void CG::EngineImpl::BuildCommandBuffers()
@@ -782,71 +683,6 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
     }
 }
 
-void CG::EngineImpl::RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk::GLTFModel::Material::eAlphaMode alphaMode)
-{
-    enum class ePBRWorkflows { kPbrMetalRough = 0, kPbrSpecGloss = 1 };
-
-    if (node->mesh) {
-        // Render mesh primitives
-        for (const auto& primitive : node->mesh->primitives) {
-            if (primitive->material.alphaMode == alphaMode) {
-
-                const std::vector<VkDescriptorSet> descriptorsets = {
-                    descriptorSets.scene,
-                    primitive->material.descriptorSet,
-                    node->mesh->uniformBuffer.descriptorSet,
-                };
-                vkCmdBindDescriptorSets(drawCmdBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.pbrPipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
-
-                // Pass material parameters as push constants
-                PushConstBlockMaterial pushConstBlockMaterial = {};
-                pushConstBlockMaterial.emissiveFactor = primitive->material.emissiveFactor;
-                pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-                pushConstBlockMaterial.normalTextureSet = primitive->material.normalTexture != nullptr ? primitive->material.texCoordSets.normal : -1;
-                pushConstBlockMaterial.occlusionTextureSet = primitive->material.occlusionTexture != nullptr ? primitive->material.texCoordSets.occlusion : -1;
-                pushConstBlockMaterial.emissiveTextureSet = primitive->material.emissiveTexture != nullptr ? primitive->material.texCoordSets.emissive : -1;
-                pushConstBlockMaterial.alphaMask = static_cast<float>(primitive->material.alphaMode == Vk::GLTFModel::Material::eAlphaMode::kAlphaModeMask);
-                pushConstBlockMaterial.alphaMaskCutoff = primitive->material.alphaCutoff;
-
-
-                if (primitive->material.pbrWorkflows.metallicRoughness) {
-                    // Metallic roughness workflow
-                    pushConstBlockMaterial.workflow = static_cast<float>(ePBRWorkflows::kPbrMetalRough);
-                    pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
-                    pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
-                    pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
-                    pushConstBlockMaterial.physicalDescriptorTextureSet = primitive->material.metallicRoughnessTexture != nullptr ? primitive->material.texCoordSets.metallicRoughness : -1;
-                    pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-                }
-
-                if (primitive->material.pbrWorkflows.specularGlossiness) {
-                    // Specular glossiness workflow
-                    // Not supported
-                    pushConstBlockMaterial.workflow = static_cast<float>(ePBRWorkflows::kPbrSpecGloss);
-                    pushConstBlockMaterial.baseColorFactor = primitive->material.baseColorFactor;
-                    pushConstBlockMaterial.metallicFactor = primitive->material.metallicFactor;
-                    pushConstBlockMaterial.roughnessFactor = primitive->material.roughnessFactor;
-                    pushConstBlockMaterial.physicalDescriptorTextureSet = primitive->material.metallicRoughnessTexture != nullptr ? primitive->material.texCoordSets.metallicRoughness : -1;
-                    pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
-                }
-
-                vkCmdPushConstants(drawCmdBuffers[cbIndex], pipelineLayouts.pbrPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
-
-                if (primitive->hasIndices) {
-                    vkCmdDrawIndexed(drawCmdBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
-                }
-                else {
-                    vkCmdDraw(drawCmdBuffers[cbIndex], primitive->vertexCount, 1, 0, 0);
-                }
-            }
-        }
-
-    };
-    for (const auto& child : node->children) {
-        RenderNode(child.get(), cbIndex, alphaMode);
-    }
-}
-
 void CG::EngineImpl::SetupNodeDescriptorSet(Vk::GLTFModel::Node* node)
 {
     if (node->mesh) {
@@ -1305,7 +1141,12 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
             { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // vertexBuffers[]
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // indexBuffers[]
-            { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // baseColorTextures[]
+            { 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // materials[]
+            { 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // baseColorTextures[]
+            { 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // physicalDescriptorTextures[]
+            { 5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // normalTextures[]
+            { 6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // ambientOcclusionTextures[]
+            { 7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // emissiveTextures[]
         };
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
         descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1318,6 +1159,12 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
 
         std::vector<VkDescriptorBufferInfo> dbiVert;
         std::vector<VkDescriptorBufferInfo> dbiIdx;
+        std::vector<VkDescriptorBufferInfo> dbiMaterial;
+        std::vector<VkDescriptorImageInfo> diiBaseCol;
+        std::vector<VkDescriptorImageInfo> diiPhysicalDescr;
+        std::vector<VkDescriptorImageInfo> diiNormal;
+        std::vector<VkDescriptorImageInfo> diiOcclusion;
+        std::vector<VkDescriptorImageInfo> diiEmissive;
 
         for (const auto& node : testScene->GetFlatNodes())
         {
@@ -1327,13 +1174,26 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
                 {
                     dbiVert.push_back(primitive->vertices.descriptor);
                     dbiIdx.push_back(primitive->indices.descriptor);
+                    dbiMaterial.push_back(primitive->material.materialParams.descriptor);
+                    diiBaseCol.push_back(primitive->material.baseColorTexture ? primitive->material.baseColorTexture->texture.descriptor : emptyTexture.descriptor);
+                    diiPhysicalDescr.push_back(primitive->material.metallicRoughnessTexture ? primitive->material.metallicRoughnessTexture->texture.descriptor : emptyTexture.descriptor);
+                    diiNormal.push_back(primitive->material.normalTexture ? primitive->material.normalTexture->texture.descriptor : emptyTexture.descriptor);
+                    diiOcclusion.push_back(primitive->material.occlusionTexture ? primitive->material.occlusionTexture->texture.descriptor : emptyTexture.descriptor);
+                    diiEmissive.push_back(primitive->material.emissiveTexture ? primitive->material.emissiveTexture->texture.descriptor : emptyTexture.descriptor);
                 }
             }
         }
 
+
         std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
             Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, dbiVert.data(), static_cast<uint32_t>(dbiVert.size())),
             Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, dbiIdx.data(),  static_cast<uint32_t>(dbiIdx.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, dbiMaterial.data(),  static_cast<uint32_t>(dbiMaterial.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3, diiBaseCol.data(),  static_cast<uint32_t>(diiBaseCol.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4, diiPhysicalDescr.data(),  static_cast<uint32_t>(diiPhysicalDescr.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5, diiNormal.data(),  static_cast<uint32_t>(diiNormal.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6, diiOcclusion.data(),  static_cast<uint32_t>(diiOcclusion.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 7, diiEmissive.data(),  static_cast<uint32_t>(diiEmissive.size())),
         };
         vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
     }

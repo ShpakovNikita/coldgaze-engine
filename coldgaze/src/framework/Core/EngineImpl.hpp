@@ -110,9 +110,6 @@ namespace CG
 
 		struct RenderPipelines
 		{
-			VkPipeline wireframe;
-			VkPipeline solidPBR_MSAA;
-			VkPipeline solidPBR_MSAA_AlphaBlend;
 			VkPipeline RTX;
 		} pipelines = {};
 
@@ -121,26 +118,7 @@ namespace CG
 			Vk::Texture irradianceCube;
 		} textures = {};
 
-        struct PushConstBlockMaterial {
-            glm::vec4 baseColorFactor;
-            glm::vec4 emissiveFactor;
-            glm::vec4 diffuseFactor;
-            glm::vec4 specularFactor;
-            float workflow;
-            int colorTextureSet;
-            int physicalDescriptorTextureSet;
-            int normalTextureSet;
-            int occlusionTextureSet;
-            int emissiveTextureSet;
-            float metallicFactor;
-            float roughnessFactor;
-            float alphaMask;
-            float alphaMaskCutoff;
-        };
-
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
-
-		void PreparePipelines();
 
 		void DrawUI();
 
@@ -161,7 +139,6 @@ namespace CG
 
 		void LoadSkybox(const std::string& cubeMapFilePath);
 
-		void RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk::GLTFModel::Material::eAlphaMode alphaMode);
 		void SetupNodeDescriptorSet(Vk::GLTFModel::Node* node);
 
 		void CreateBottomLevelAccelerationStructure(const VkGeometryNV* geometries, uint32_t blasIndex, size_t geomCount);
