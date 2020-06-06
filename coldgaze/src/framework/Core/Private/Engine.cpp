@@ -39,7 +39,7 @@ CG::Engine::Engine(CG::EngineConfig& aEngineConfig)
 
 CG::Engine::~Engine() = default;
 
-VkPhysicalDeviceFeatures CG::Engine::GetEnabledDeviceFeatures() const
+VkPhysicalDeviceFeatures2 CG::Engine::GetEnabledDeviceFeatures() const
 {
 	return {};
 }
@@ -352,16 +352,13 @@ bool CG::Engine::CreateDevices()
 			}
 		}
 	}
-
-	void* deviceCreatepNextChain = nullptr;
-
 	vkPhysicalDevice = physicalDevices[selectedDevice];
 
     vkDevice = new CG::Vk::Device(vkPhysicalDevice);
 
-	VkPhysicalDeviceFeatures enabledFeatures = GetEnabledDeviceFeatures();
+	VkPhysicalDeviceFeatures2 enabledFeatures = GetEnabledDeviceFeatures();
 
-	VK_CHECK_RESULT(vkDevice->CreateLogicalDevice(enabledFeatures, enabledDeviceExtensions, deviceCreatepNextChain));
+	VK_CHECK_RESULT(vkDevice->CreateLogicalDevice(enabledFeatures, enabledDeviceExtensions));
 
     VkDevice device = vkDevice->logicalDevice;
 

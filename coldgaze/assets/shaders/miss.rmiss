@@ -1,7 +1,14 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
-layout(location = 0) rayPayloadInNV vec3 hitValue;
+struct RayPayload
+{
+	vec4 colorAndDistance; // rgb + t
+	vec4 scatterDirection; // xyz + w (is scatter needed)
+	uint randomSeed;
+};
+
+layout(location = 0) rayPayloadInNV RayPayload rayPayload;
 
 const vec2 invAtan = vec2(0.1591, 0.3183);
 vec2 SampleSphericalMap(vec3 v)
@@ -14,5 +21,5 @@ vec2 SampleSphericalMap(vec3 v)
 
 void main()
 {
-    hitValue = vec3(0.0, 0.0, 0.2);
+    rayPayload.colorAndDistance.xyz = vec3(0.0, 0.0, 0.2);
 }

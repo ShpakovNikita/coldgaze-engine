@@ -55,7 +55,7 @@ namespace CG
 		const std::string GetAssetPath() const;
 
 	protected:
-        virtual VkPhysicalDeviceFeatures GetEnabledDeviceFeatures() const;
+        virtual VkPhysicalDeviceFeatures2 GetEnabledDeviceFeatures() const;
         virtual void RenderFrame(float deltaTime);
         virtual void Prepare();
 		virtual void Cleanup();

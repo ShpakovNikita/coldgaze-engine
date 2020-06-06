@@ -118,7 +118,7 @@ namespace CG
 			*
 			* @return VkResult of the device creation call
 			*/
-			VkResult CreateLogicalDevice(VkPhysicalDeviceFeatures enabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain = true, VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
+			VkResult CreateLogicalDevice(VkPhysicalDeviceFeatures2 enabledFeatures, std::vector<const char*> enabledExtensions, bool useSwapChain = true, VkQueueFlags requestedQueueTypes = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT);
 
 			/**
 			* Create a buffer on the device

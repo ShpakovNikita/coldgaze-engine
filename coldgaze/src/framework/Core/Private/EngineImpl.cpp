@@ -39,6 +39,8 @@ CG::EngineImpl::EngineImpl(CG::EngineConfig& engineConfig)
     enabledInstanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     enabledDeviceExtensions.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
     enabledDeviceExtensions.push_back(VK_NV_RAY_TRACING_EXTENSION_NAME);
+    enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
+    enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
 }
 
 CG::EngineImpl::~EngineImpl() = default;
@@ -92,9 +94,9 @@ void CG::EngineImpl::Prepare()
 
     // CreateNVRayTracingGeometry();
     CreateNVRayTracingStoreImage();
+    CreateRTXDescriptorSets();
     CreateRTXPipeline();
     CreateShaderBindingTable();
-    CreateRTXDescriptorSets();
 
 
 	BuildCommandBuffers();
@@ -115,7 +117,7 @@ void CG::EngineImpl::Cleanup()
 	Engine::Cleanup();
 }
 
-VkPhysicalDeviceFeatures CG::EngineImpl::GetEnabledDeviceFeatures() const
+VkPhysicalDeviceFeatures2 CG::EngineImpl::GetEnabledDeviceFeatures() const
 {
 	VkPhysicalDeviceFeatures availableFeatures = vkDevice->features;
 	VkPhysicalDeviceFeatures enabledFeatures = {};
@@ -130,7 +132,22 @@ VkPhysicalDeviceFeatures CG::EngineImpl::GetEnabledDeviceFeatures() const
         enabledFeatures.sampleRateShading = VK_TRUE;
     }
 
-	return enabledFeatures;
+    // TODO: remove hardcode descr indexing features
+    static VkPhysicalDeviceDescriptorIndexingFeaturesEXT physicalDeviceDescriptorIndexingFeatures;
+    physicalDeviceDescriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+    physicalDeviceDescriptorIndexingFeatures.pNext = nullptr;
+    physicalDeviceDescriptorIndexingFeatures.runtimeDescriptorArray = true;
+    physicalDeviceDescriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+    physicalDeviceDescriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
+    physicalDeviceDescriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+
+    VkPhysicalDeviceFeatures2 enabledFeatures2;
+
+    enabledFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    enabledFeatures2.features = enabledFeatures;
+    enabledFeatures2.pNext = &physicalDeviceDescriptorIndexingFeatures;
+
+	return enabledFeatures2;
 }
 
 void CG::EngineImpl::CaptureEvent(const SDL_Event& event)
@@ -178,7 +195,7 @@ void CG::EngineImpl::PreparePipelines()
     pushConstantRange.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     pipelineLayoutCI.pushConstantRangeCount = 1;
     pipelineLayoutCI.pPushConstantRanges = &pushConstantRange;
-    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCI, nullptr, &pipelineLayout));
+    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCI, nullptr, &pipelineLayouts.pbrPipelineLayout));
 
 	const std::vector<VkVertexInputBindingDescription> vertexInputBindings = {
 		Vk::Initializers::VertexInputBindingDescription(0, sizeof(Vk::GLTFModel::Vertex), VK_VERTEX_INPUT_RATE_VERTEX),
@@ -188,8 +205,8 @@ void CG::EngineImpl::PreparePipelines()
 		Vk::Initializers::VertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, normal)),		
         Vk::Initializers::VertexInputAttributeDescription(0, 2, VK_FORMAT_R32G32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, uv0)),
         Vk::Initializers::VertexInputAttributeDescription(0, 3, VK_FORMAT_R32G32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, uv1)),
-        Vk::Initializers::VertexInputAttributeDescription(0, 4, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, joint0)),
-        Vk::Initializers::VertexInputAttributeDescription(0, 5, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, weight0)),
+        // Vk::Initializers::VertexInputAttributeDescription(0, 4, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, joint0)),
+        // Vk::Initializers::VertexInputAttributeDescription(0, 5, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(Vk::GLTFModel::Vertex, weight0)),
 	};
 
 	VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = Vk::Initializers::PipelineVertexInputStateCreateInfo();
@@ -203,7 +220,7 @@ void CG::EngineImpl::PreparePipelines()
 		LoadShader(GetAssetPath() + "shaders/compiled/glTF_PBR.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
 	};
 
-	VkGraphicsPipelineCreateInfo pipelineCreateInfo = Vk::Initializers::PipelineCreateInfo(pipelineLayout, renderPass, 0);
+	VkGraphicsPipelineCreateInfo pipelineCreateInfo = Vk::Initializers::PipelineCreateInfo(pipelineLayouts.pbrPipelineLayout, renderPass, 0);
 	pipelineCreateInfo.pVertexInputState = &vertexInputStateCreateInfo;
 	pipelineCreateInfo.pInputAssemblyState = &inputAssemblyStateCreateInfo;
 	pipelineCreateInfo.pRasterizationState = &rasterizationStateCreateInfo;
@@ -353,6 +370,7 @@ void CG::EngineImpl::SetupDescriptors()
     assert(testScene != nullptr);
 
     constexpr uint32_t uniformSamplersCount = 5;
+    constexpr uint32_t typePoolSize = 128;
 
     uint32_t imageSamplerCount = 0;
     uint32_t materialCount = 0;
@@ -372,15 +390,26 @@ void CG::EngineImpl::SetupDescriptors()
 
     std::vector<VkDescriptorPoolSize> poolSizes = 
     {
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 /*env map*/ + meshCount },
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, imageSamplerCount }
+        { VK_DESCRIPTOR_TYPE_SAMPLER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, typePoolSize },
+        { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, typePoolSize },
     };
-    VkDescriptorPoolCreateInfo descriptorPoolCI = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, 2 + materialCount + meshCount);
+
+    VkDescriptorPoolCreateInfo descriptorPoolCI = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, typePoolSize * static_cast<uint32_t>(poolSizes.size()));
     VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolCI, nullptr, &descriptorPool));
 
 
     // matrices
-    // TODO: IBL samplers
     {
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
             { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
@@ -406,15 +435,6 @@ void CG::EngineImpl::SetupDescriptors()
         writeDescriptorSets[0].dstSet = descriptorSets.scene;
         writeDescriptorSets[0].dstBinding = 0;
         writeDescriptorSets[0].pBufferInfo = &sceneUbo.descriptor;
-
-        /*
-        writeDescriptorSets[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writeDescriptorSets[2].descriptorCount = 1;
-        writeDescriptorSets[2].dstSet = descriptorSets.scene;
-        writeDescriptorSets[2].dstBinding = 2;
-        writeDescriptorSets[2].pImageInfo = &textures.irradianceCube.descriptor;
-        */
 
         vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
     }
@@ -706,6 +726,7 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
         BindModelMaterials();
         testScene->SetLoaded(true);
 
+        UpdateUniformBuffers();
         CreateNVRayTracingGeometry();
     }
     catch (const Vk::AssetLoadingException& e)
@@ -775,7 +796,7 @@ void CG::EngineImpl::RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk:
                     primitive->material.descriptorSet,
                     node->mesh->uniformBuffer.descriptorSet,
                 };
-                vkCmdBindDescriptorSets(drawCmdBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
+                vkCmdBindDescriptorSets(drawCmdBuffers[cbIndex], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayouts.pbrPipelineLayout, 0, static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, NULL);
 
                 // Pass material parameters as push constants
                 PushConstBlockMaterial pushConstBlockMaterial = {};
@@ -809,7 +830,7 @@ void CG::EngineImpl::RenderNode(Vk::GLTFModel::Node* node, uint32_t cbIndex, Vk:
                     pushConstBlockMaterial.colorTextureSet = primitive->material.baseColorTexture != nullptr ? primitive->material.texCoordSets.baseColor : -1;
                 }
 
-                vkCmdPushConstants(drawCmdBuffers[cbIndex], pipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
+                vkCmdPushConstants(drawCmdBuffers[cbIndex], pipelineLayouts.pbrPipelineLayout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstBlockMaterial), &pushConstBlockMaterial);
 
                 if (primitive->hasIndices) {
                     vkCmdDrawIndexed(drawCmdBuffers[cbIndex], primitive->indexCount, 1, primitive->firstIndex, 0, 0);
@@ -863,6 +884,7 @@ void CG::EngineImpl::CreateBottomLevelAccelerationStructure(const VkGeometryNV* 
         accelerationStructureInfo.instanceCount = 0;
         accelerationStructureInfo.geometryCount = static_cast<uint32_t>(geomCount);
         accelerationStructureInfo.pGeometries = geometries;
+        accelerationStructureInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_NV;
 
         VkAccelerationStructureCreateInfoNV accelerationStructureCI = {};
         accelerationStructureCI.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_NV;
@@ -918,6 +940,7 @@ void CG::EngineImpl::CreateBottomLevelAccelerationStructure(const VkGeometryNV* 
         buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_NV;
         buildInfo.geometryCount = static_cast<uint32_t>(geomCount);
         buildInfo.pGeometries = geometries;
+        buildInfo.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_NV;
 
         vkCmdBuildAccelerationStructureNV(
             cmdBuffer,
@@ -1096,7 +1119,7 @@ void CG::EngineImpl::CreateNVRayTracingGeometry()
                 geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_GEOMETRY_AABB_NV;
                 geometry.flags = VK_GEOMETRY_OPAQUE_BIT_NV;
 
-                blasData[currentGeomIndex].transform = node->GetWorldMatrix();
+                blasData[currentGeomIndex].transform = sceneUboData.model * node->GetWorldMatrix();
                 CreateBottomLevelAccelerationStructure(&geometry, currentGeomIndex, 1);
 
                 ++currentGeomIndex;
@@ -1183,42 +1206,13 @@ VkDeviceSize CG::EngineImpl::CopyShaderIdentifier(uint8_t* data, const uint8_t* 
 
 void CG::EngineImpl::CreateRTXPipeline()
 {
-    VkDescriptorSetLayoutBinding accelerationStructureLayoutBinding{};
-    accelerationStructureLayoutBinding.binding = 0;
-    accelerationStructureLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
-    accelerationStructureLayoutBinding.descriptorCount = 1;
-    accelerationStructureLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_NV;
+    const std::vector<VkDescriptorSetLayout> setLayouts = {
+        descriptorSetLayouts.rtxRaygenLayout, descriptorSetLayouts.rtxRayhitLayout,
+    };
 
-    VkDescriptorSetLayoutBinding resultImageLayoutBinding{};
-    resultImageLayoutBinding.binding = 1;
-    resultImageLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    resultImageLayoutBinding.descriptorCount = 1;
-    resultImageLayoutBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_NV;
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = Vk::Initializers::PipelineLayoutCreateInfo(setLayouts);
 
-    VkDescriptorSetLayoutBinding uniformBufferBinding{};
-    uniformBufferBinding.binding = 2;
-    uniformBufferBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uniformBufferBinding.descriptorCount = 1;
-    uniformBufferBinding.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_NV;
-
-    std::vector<VkDescriptorSetLayoutBinding> bindings({
-        accelerationStructureLayoutBinding,
-        resultImageLayoutBinding,
-        uniformBufferBinding
-        });
-
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
-    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &layoutInfo, nullptr, &descriptorSetLayouts.rtxSampleLayout));
-
-    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
-    pipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutCreateInfo.setLayoutCount = 1;
-    pipelineLayoutCreateInfo.pSetLayouts = &descriptorSetLayouts.rtxSampleLayout;
-
-    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+    VK_CHECK_RESULT(vkCreatePipelineLayout(vkDevice->logicalDevice, &pipelineLayoutCreateInfo, nullptr, &pipelineLayouts.rtxPipelineLayout));
 
     const uint32_t shaderIndexRaygen = 0;
     const uint32_t shaderIndexMiss = 1;
@@ -1255,59 +1249,108 @@ void CG::EngineImpl::CreateRTXPipeline()
     rayPipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
     rayPipelineInfo.pGroups = groups.data();
     rayPipelineInfo.maxRecursionDepth = 1;
-    rayPipelineInfo.layout = pipelineLayout;
+    rayPipelineInfo.layout = pipelineLayouts.rtxPipelineLayout;
 
     VK_CHECK_RESULT(vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1, &rayPipelineInfo, nullptr, &pipelines.RTX));
 }
 
 void CG::EngineImpl::CreateRTXDescriptorSets()
 {
-    std::vector<VkDescriptorPoolSize> poolSizes = {
-        { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 1 },
-        { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 },
-        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 },
-    };
-    VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, 1);
-    VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolCreateInfo, nullptr, &descriptorPool));
+    {
+        std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings({
+            {0, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
+            {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
+            {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
+        });
 
-    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxSampleLayout, 1);
-    VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxSample));
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+        layoutInfo.pBindings = setLayoutBindings.data();
+        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &layoutInfo, nullptr, &descriptorSetLayouts.rtxRaygenLayout));
 
-    VkWriteDescriptorSetAccelerationStructureNV descriptorAccelerationStructureInfo{};
-    descriptorAccelerationStructureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_NV;
-    descriptorAccelerationStructureInfo.accelerationStructureCount = 1;
-    descriptorAccelerationStructureInfo.pAccelerationStructures = &topLevelAS.accelerationStructure;
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRaygenLayout, 1);
+        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRaygen));
 
-    VkWriteDescriptorSet accelerationStructureWrite{};
-    accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    // The specialized acceleration structure descriptor has to be chained
-    accelerationStructureWrite.pNext = &descriptorAccelerationStructureInfo;
-    accelerationStructureWrite.dstSet = descriptorSets.rtxSample;
-    accelerationStructureWrite.dstBinding = 0;
-    accelerationStructureWrite.descriptorCount = 1;
-    accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
+        VkWriteDescriptorSetAccelerationStructureNV descriptorAccelerationStructureInfo{};
+        descriptorAccelerationStructureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_NV;
+        descriptorAccelerationStructureInfo.accelerationStructureCount = 1;
+        descriptorAccelerationStructureInfo.pAccelerationStructures = &topLevelAS.accelerationStructure;
 
-    VkDescriptorImageInfo storageImageDescriptor{};
-    storageImageDescriptor.imageView = storageImage.view;
-    storageImageDescriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+        VkWriteDescriptorSet accelerationStructureWrite{};
+        accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        // The specialized acceleration structure descriptor has to be chained
+        accelerationStructureWrite.pNext = &descriptorAccelerationStructureInfo;
+        accelerationStructureWrite.dstSet = descriptorSets.rtxRaygen;
+        accelerationStructureWrite.dstBinding = 0;
+        accelerationStructureWrite.descriptorCount = 1;
+        accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV;
 
-    VkWriteDescriptorSet resultImageWrite = Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxSample, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &storageImageDescriptor);
-    VkWriteDescriptorSet uniformBufferWrite = Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxSample, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &sceneUbo.descriptor);
+        VkDescriptorImageInfo storageImageDescriptor{};
+        storageImageDescriptor.imageView = storageImage.view;
+        storageImageDescriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-        accelerationStructureWrite,
-        resultImageWrite,
-        uniformBufferWrite,
-    };
-    vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+            accelerationStructureWrite,
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaygen, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, &storageImageDescriptor),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaygen, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2, &sceneUbo.descriptor),
+        };
+        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
+    }
+
+    {
+        uint32_t primCount = static_cast<uint32_t>(testScene->GetPrimitivesCount());
+
+        std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+            { 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // vertexBuffers[]
+            { 1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // indexBuffers[]
+            { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, primCount, VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // baseColorTextures[]
+        };
+        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+        descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+        descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.rtxRayhitLayout));
+
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRayhitLayout, 1);
+        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRayhit));
+
+        std::vector<VkDescriptorBufferInfo> dbiVert;
+        std::vector<VkDescriptorBufferInfo> dbiIdx;
+
+        for (const auto& node : testScene->GetFlatNodes())
+        {
+            if (node->mesh)
+            {
+                for (const auto& primitive : node->mesh->primitives)
+                {
+                    dbiVert.push_back(primitive->vertices.descriptor);
+                    dbiIdx.push_back(primitive->indices.descriptor);
+                }
+            }
+        }
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, dbiVert.data(), static_cast<uint32_t>(dbiVert.size())),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRayhit, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, dbiIdx.data(),  static_cast<uint32_t>(dbiIdx.size())),
+        };
+        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
+    }
 }
 
 void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
 {
     const VkImageSubresourceRange subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
 
+    const std::vector<VkDescriptorSet> descriptorsets = {
+        descriptorSets.rtxRaygen,
+        descriptorSets.rtxRayhit,
+    };
+
     vkCmdBindPipeline(drawCmdBuffers[swapChainImageIndex], VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelines.RTX);
-    vkCmdBindDescriptorSets(drawCmdBuffers[swapChainImageIndex], VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelineLayout, 0, 1, &descriptorSets.rtxSample, 0, 0);
+    vkCmdBindDescriptorSets(drawCmdBuffers[swapChainImageIndex], VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelineLayouts.rtxPipelineLayout, 0,
+        static_cast<uint32_t>(descriptorsets.size()), descriptorsets.data(), 0, 0);
 
     VkDeviceSize bindingOffsetRayGenShader = rayTracingProperties.shaderGroupHandleSize * kIndexRaygen;
     VkDeviceSize bindingOffsetMissShader = rayTracingProperties.shaderGroupHandleSize * kIndexMiss;

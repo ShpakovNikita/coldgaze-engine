@@ -4,8 +4,8 @@ layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec2 inUV0;
 layout (location = 3) in vec2 inUV1;
-layout (location = 4) in vec4 inJoint0;
-layout (location = 5) in vec4 inWeight0;
+// layout (location = 4) in vec4 inJoint0;
+// layout (location = 5) in vec4 inWeight0;
 
 #define LIGHTS_COUNT 6
 
@@ -42,6 +42,7 @@ layout (location = 3) out vec2 outUV1;
 
 void main() 
 {
+    /*
 	vec4 locPos;
 	if (node.jointCount > 0.0) {
 		// Mesh is skinned
@@ -58,6 +59,10 @@ void main()
 		outNormal = normalize(transpose(inverse(mat3(uboScene.model * node.matrix))) * inNormal);
 	}
 
+    */
+    vec4 locPos = uboScene.model * node.matrix * vec4(inPos, 1.0);
+    outNormal = normalize(transpose(inverse(mat3(uboScene.model * node.matrix))) * inNormal);
+    
 	locPos.y = -locPos.y;
 	outWorldPos = locPos.xyz / locPos.w;
 	outUV0 = inUV0;

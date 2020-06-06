@@ -502,12 +502,12 @@ void CG::Vk::GLTFModel::CreatePrimitiveBuffers(Primitive* newPrimitive, std::vec
         indexBuffer.data()));
 
     VK_CHECK_RESULT(vkDevice->CreateBuffer(
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &newPrimitive->vertices,
         vertexBufferSize));
     VK_CHECK_RESULT(vkDevice->CreateBuffer(
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         &newPrimitive->indices,
         indexBufferSize));
@@ -669,12 +669,14 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
                     vert.uv0 = bufferTexCoordSet0 ? glm::make_vec2(&bufferTexCoordSet0[v * uv0ByteStride]) : glm::vec2(0.0f);
                     vert.uv1 = bufferTexCoordSet1 ? glm::make_vec2(&bufferTexCoordSet1[v * uv1ByteStride]) : glm::vec2(0.0f);
 
+                    /*
                     vert.joint0 = hasSkin ? glm::vec4(glm::make_vec4(&bufferJoints[v * jointByteStride])) : glm::vec4(0.0f);
                     vert.weight0 = hasSkin ? glm::make_vec4(&bufferWeights[v * weightByteStride]) : glm::vec4(0.0f);
                     // Fix for all zero weights
                     if (glm::length(vert.weight0) == 0.0f) {
                         vert.weight0 = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
                     }
+                    */
                     vertexBuffer.push_back(vert);
                 }
             }

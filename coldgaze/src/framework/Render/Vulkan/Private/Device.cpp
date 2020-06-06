@@ -182,7 +182,7 @@ VkBool32 CG::Vk::Device::GetSupportedDepthFormat(VkPhysicalDevice aPhysicalDevic
     return false;
 }
 
-VkResult CG::Vk::Device::CreateLogicalDevice(VkPhysicalDeviceFeatures aEnabledFeatures, std::vector<const char*> enabledExtensions, void* pNextChain, bool useSwapChain /*= true*/, VkQueueFlags requestedQueueTypes /*= VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT*/)
+VkResult CG::Vk::Device::CreateLogicalDevice(VkPhysicalDeviceFeatures2 aEnabledFeatures, std::vector<const char*> enabledExtensions, bool useSwapChain /*= true*/, VkQueueFlags requestedQueueTypes /*= VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT*/)
 {
     // Desired queues need to be requested upon logical device creation
     // Due to differing queue family configurations of Vulkan implementations this can be a bit tricky, especially if the application
@@ -263,19 +263,10 @@ VkResult CG::Vk::Device::CreateLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
 
     VkDeviceCreateInfo deviceCreateInfo = {};
     deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());;
+    deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
-    deviceCreateInfo.pEnabledFeatures = &aEnabledFeatures;
-
-    // If a pNext(Chain) has been passed, we need to add it to the device creation info
-    if (pNextChain) {
-        VkPhysicalDeviceFeatures2 physicalDeviceFeatures2{};
-        physicalDeviceFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        physicalDeviceFeatures2.features = aEnabledFeatures;
-        physicalDeviceFeatures2.pNext = pNextChain;
-        deviceCreateInfo.pEnabledFeatures = nullptr;
-        deviceCreateInfo.pNext = &physicalDeviceFeatures2;
-    }
+    deviceCreateInfo.pEnabledFeatures = nullptr;
+    deviceCreateInfo.pNext = &aEnabledFeatures;
 
     // Enable the debug marker extension if it is present (likely meaning a debugging tool is present)
     if (ExtensionSupported(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
@@ -298,7 +289,7 @@ VkResult CG::Vk::Device::CreateLogicalDevice(VkPhysicalDeviceFeatures aEnabledFe
         commandPool = CreateCommandPool(queueFamilyIndices.graphics);
     }
 
-    enabledFeatures = aEnabledFeatures;
+    enabledFeatures = aEnabledFeatures.features;
 
     return result;
 }

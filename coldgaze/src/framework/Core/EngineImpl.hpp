@@ -37,7 +37,7 @@ namespace CG
         void Prepare() override;
 		void Cleanup() override;
 
-		VkPhysicalDeviceFeatures GetEnabledDeviceFeatures() const override;
+		VkPhysicalDeviceFeatures2 GetEnabledDeviceFeatures() const override;
 		void CaptureEvent(const SDL_Event& event) override;
 
     private:
@@ -98,12 +98,14 @@ namespace CG
 			VkDescriptorSetLayout scene;
 			VkDescriptorSetLayout material;
 			VkDescriptorSetLayout node;
-			VkDescriptorSetLayout rtxSampleLayout;
+			VkDescriptorSetLayout rtxRaygenLayout;
+			VkDescriptorSetLayout rtxRayhitLayout;
 		} descriptorSetLayouts = {};
 
         struct DescriptorSets {
             VkDescriptorSet scene;
-            VkDescriptorSet rtxSample;
+            VkDescriptorSet rtxRaygen;
+            VkDescriptorSet rtxRayhit;
         } descriptorSets = {};
 
 		struct RenderPipelines
@@ -176,7 +178,12 @@ namespace CG
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
-		VkPipelineLayout pipelineLayout = {};
+        struct
+        {
+            VkPipelineLayout pbrPipelineLayout = {};
+            VkPipelineLayout rtxPipelineLayout = {};
+        } pipelineLayouts = {};
+
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		Vk::Texture2D emptyTexture;
