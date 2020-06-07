@@ -2,6 +2,8 @@
 #extension GL_NV_ray_tracing : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
+#define LIGHTS_COUNT 6
+
 struct RayPayload
 {
 	vec4 colorAndDistance; // rgb + t
@@ -37,6 +39,18 @@ struct Material {
 	float alphaMaskCutoff;
 };
 
+layout(binding = 2, set = 0) uniform UBOScene
+{
+	mat4 projection;
+	mat4 model;
+	mat4 view;
+    vec4 cameraPos;
+    
+    // vec4 because of alignment
+    vec4 lightPos[LIGHTS_COUNT];
+    vec4 lightColor[LIGHTS_COUNT];
+} uboScene;
+
 layout(binding = 0, set = 1) readonly buffer VertexBuffers { VertexData vertices[]; } vertexBuffers[];
 layout(binding = 1, set = 1) readonly buffer IndexBuffers { uint indices[]; } indexBuffers[];
 layout(binding = 2, set = 1) uniform MaterialBuffers { Material material; } materialBuffers[];
@@ -45,6 +59,8 @@ layout(binding = 4, set = 1) uniform sampler2D physicalDescriptorTextures[];
 layout(binding = 5, set = 1) uniform sampler2D normalTextures[];
 layout(binding = 6, set = 1) uniform sampler2D ambientOcclusionTextures[];
 layout(binding = 7, set = 1) uniform sampler2D emissiveTextures[];
+
+layout(binding = 0, set = 2) uniform sampler2D equirectangularMap;
 
 layout(location = 0) rayPayloadInNV RayPayload rayPayload;
 hitAttributeNV vec3 attribs;
@@ -213,9 +229,60 @@ void main()
     const VertexData v2 = FetchVertexData(2);
     
     const VertexData vertexData = BaryLerp(v0, v1, v2, barycentrics);
-    
-    const vec3 baseColor = texture(baseColorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], vertexData.inUV.xy).rgb;
     const Material material = materialBuffers[nonuniformEXT(gl_InstanceCustomIndexNV)].material;
     
-    rayPayload.colorAndDistance.xyz = baseColor;
+    vec4 albedo;
+    if (material.baseColorTextureSet > -1) {
+        albedo = texture(baseColorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], 
+            material.baseColorTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw) * material.baseColorFactor;
+    } else {
+        albedo = material.baseColorFactor;
+    }
+    
+    if (material.workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    {
+        vec3 N = perturbNormal(vertexData, material);
+        vec3 V = normalize(uboScene.cameraPos.xyz - vertexData.inPos.xyz);
+        
+        float occlusion = 1.0f;
+        float roughness = material.roughnessFactor;
+        float metallic = material.metallicFactor;
+        
+        if (material.physicalDescriptorTextureSet > -1) {
+			// Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
+			// This layout intentionally reserves the 'r' channel for (optional) occlusion map data
+			vec4 mrSample = texture(physicalDescriptorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], material.physicalDescriptorTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw);
+			roughness = mrSample.g * roughness;
+			metallic = mrSample.b * metallic;
+		} else {
+			roughness = clamp(roughness, c_MinRoughness, 1.0);
+			metallic = clamp(metallic, 0.0, 1.0);
+		}
+        
+        if (material.occlusionTextureSet > -1) {
+            float occlusion = texture(ambientOcclusionTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], (material.occlusionTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw)).r;
+        }
+        
+        vec3 F0 = vec3(0.04); 
+        F0 = mix(F0, albedo.xyz, metallic);
+        
+        vec3 radiance = vec3(0.0);
+        for (int i = 0; i < LIGHTS_COUNT; ++i)
+        {			
+            radiance += BRDF_CookTorrance(roughness, metallic, albedo.xyz, N, V, F0, uboScene.lightPos[i].xyz, uboScene.lightColor[i].xyz, vertexData);
+        }
+        
+        vec3 ambient = vec3(0.03) * albedo.xyz * occlusion;
+        vec3 diffuseColor = ambient + radiance;   
+        
+        // Tone compression 
+        diffuseColor = diffuseColor / (diffuseColor + vec3(1.0));
+        diffuseColor = pow(diffuseColor, vec3(1.0/2.2));  
+        
+        rayPayload.colorAndDistance.xyz = diffuseColor;
+    }
+    else
+    {
+        rayPayload.colorAndDistance.xyz = vec3(1.0, 0.0, 0.0);
+    }
 }

@@ -921,7 +921,7 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings({
             {0, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
             {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
-            {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
+            {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV},
         });
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -1025,7 +1025,7 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
 
     {
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_MISS_BIT_NV, nullptr }, // equirectangularMap
+            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_MISS_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // equirectangularMap
         };
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
         descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1041,6 +1041,7 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
         };
         vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
     }
+
 }
 
 void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
