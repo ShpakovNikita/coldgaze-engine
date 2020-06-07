@@ -60,6 +60,8 @@ namespace CG
         virtual void Prepare();
 		virtual void Cleanup();
 
+        virtual void OnWindowResize() {};
+
 		virtual void BuildCommandBuffers();
 
 		virtual void CaptureEvent(const SDL_Event&) {};

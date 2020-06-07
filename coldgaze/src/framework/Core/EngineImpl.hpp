@@ -39,6 +39,8 @@ namespace CG
 		VkPhysicalDeviceFeatures2 GetEnabledDeviceFeatures() const override;
 		void CaptureEvent(const SDL_Event& event) override;
 
+        void OnWindowResize() override;
+
     private:
         struct AccelerationStructure {
             VkDeviceMemory memory;
@@ -93,13 +95,16 @@ namespace CG
 		Vk::Buffer ubo;
 		Vk::Buffer sceneUbo;
 
+        struct DescriptorSetLayout
+        {
+            bool created = false;
+            VkDescriptorSetLayout layout;
+        };
+
 		struct DescriptorSetLayouts {
-			VkDescriptorSetLayout scene;
-			VkDescriptorSetLayout material;
-			VkDescriptorSetLayout node;
-			VkDescriptorSetLayout rtxRaygenLayout;
-			VkDescriptorSetLayout rtxRayhitLayout;
-			VkDescriptorSetLayout rtxRaymissLayout;
+            DescriptorSetLayout rtxRaygenLayout;
+            DescriptorSetLayout rtxRayhitLayout;
+            DescriptorSetLayout rtxRaymissLayout;
 		} descriptorSetLayouts = {};
 
         struct DescriptorSets {
@@ -135,25 +140,34 @@ namespace CG
 
 		void LoadSkybox(const std::string& cubeMapFilePath);
 
-		void SetupNodeDescriptorSet(Vk::GLTFModel::Node* node);
-
 		void CreateBottomLevelAccelerationStructure(const VkGeometryNV* geometries, uint32_t blasIndex, size_t geomCount);
 		void CreateTopLevelAccelerationStructure();
 
 		void LoadNVRayTracingProcs();
+
 		void CreateNVRayTracingGeometry();
+		void DestroyNVRayTracingGeometry();
+
 		void CreateNVRayTracingStoreImage();
+		void DestroyNVRayTracingStoreImage();
+
         void CreateShaderBindingTable();
         VkDeviceSize CopyShaderIdentifier(uint8_t* data, const uint8_t* shaderHandleStorage, uint32_t groupIndex);
+
         void CreateRTXPipeline();
-        void CreateRTXDescriptorSets();
+        void DestroyRTXPipeline();
+
+        void CreateRTXPipelineLayout();
+        void DestroyRTXPipelineLayout();
+
+        void SetupRTXModelDescriptorSets();
+        void SetupRTXEnviromentDescriptorSet();
         void DrawRayTracingData(uint32_t swapChainImageIndex);
 
 		CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
         struct
         {
-            VkPipelineLayout pbrPipelineLayout = {};
             VkPipelineLayout rtxPipelineLayout = {};
         } pipelineLayouts = {};
 

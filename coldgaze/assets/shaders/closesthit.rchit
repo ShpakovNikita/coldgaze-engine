@@ -25,7 +25,6 @@ struct Material {
 	vec4 emissiveFactor;
 	vec4 diffuseFactor;
 	vec4 specularFactor;
-    // int
 	float workflow;
 	int baseColorTextureSet;
 	int physicalDescriptorTextureSet;
@@ -34,7 +33,6 @@ struct Material {
 	int emissiveTextureSet;
 	float metallicFactor;	
 	float roughnessFactor;
-    // int
 	float alphaMask;	
 	float alphaMaskCutoff;
 };
@@ -166,6 +164,8 @@ vec3 dFdx(vec3 p)
 // More info http://www.thetenthplanet.de/archives/1180
 vec3 perturbNormal(VertexData vertexData, Material material)
 {
+    // return normalize(vertexData.inNormal.xyz);
+
 	vec3 tangentNormal;
     vec2 inUV;
  

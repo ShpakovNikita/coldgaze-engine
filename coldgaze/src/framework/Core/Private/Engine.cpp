@@ -867,8 +867,6 @@ void CG::Engine::WindowResize()
 {
 	vkDeviceWaitIdle(vkDevice->logicalDevice);
 
-	// TODO: recreate swapchain with new size and update camera ratio
-
 	SetupSwapChain();
 
 	vkDestroyImageView(vkDevice->logicalDevice, depthStencil.view, nullptr);
@@ -891,5 +889,7 @@ void CG::Engine::WindowResize()
 		imGui->Resize(static_cast<float>(engineConfig.width), static_cast<float>(engineConfig.height));
 		cameraComponent->UpdateViewport(engineConfig.width, engineConfig.height);
 	}
+
+	OnWindowResize();
 }
 

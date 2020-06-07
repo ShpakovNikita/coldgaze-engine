@@ -78,20 +78,19 @@ void CG::EngineImpl::Prepare()
 
     InitRayTracing();
     LoadNVRayTracingProcs();
+    CreateNVRayTracingStoreImage();
 
 	SetupSystems();
 
     PrepareUniformBuffers();
 
+    SetupDescriptorsPool();
+
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice, queue);
-
-
     LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
     LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
-    CreateNVRayTracingStoreImage();
-    CreateRTXDescriptorSets();
-    CreateRTXPipeline();
+    // CreateRTXPipeline();
     CreateShaderBindingTable();
 
 	BuildCommandBuffers();
@@ -101,6 +100,10 @@ void CG::EngineImpl::Prepare()
 
 void CG::EngineImpl::Cleanup()
 {
+    DestroyRTXPipeline();
+    DestroyNVRayTracingGeometry();
+    DestroyNVRayTracingStoreImage();
+
     emptyTexture.Destroy();
     cubemapTexture.Destroy();
 
@@ -156,6 +159,12 @@ void CG::EngineImpl::CaptureEvent(const SDL_Event& event)
 		}
 		break;
 	}
+}
+
+void CG::EngineImpl::OnWindowResize()
+{
+    DestroyNVRayTracingStoreImage();
+    CreateNVRayTracingStoreImage();
 }
 
 void CG::EngineImpl::FlushCommandBuffer(VkCommandBuffer commandBuffer)
@@ -223,8 +232,6 @@ void CG::EngineImpl::BuildCommandBuffers()
 
 void CG::EngineImpl::SetupDescriptorsPool()
 {
-    assert(testScene != nullptr);
-
     constexpr uint32_t typePoolSize = 128;
 
     std::vector<VkDescriptorPoolSize> poolSizes = 
@@ -250,7 +257,7 @@ void CG::EngineImpl::SetupDescriptorsPool()
 
 void CG::EngineImpl::BindModelMaterials()
 {
-    SetupDescriptorsPool();
+    
 }
 
 void CG::EngineImpl::UnbindModelMaterials()
@@ -452,13 +459,22 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
 {
     try
     {
+        if (testScene)
+        {
+            DestroyNVRayTracingGeometry();
+            DestroyRTXPipeline();
+            // SetupRTXEnviromentDescriptorSet();
+        }
+
         LoadModel(modelFilePath);
 
-        BindModelMaterials();
         testScene->SetLoaded(true);
 
         UpdateUniformBuffers();
         CreateNVRayTracingGeometry();
+        SetupRTXModelDescriptorSets();
+
+        CreateRTXPipeline();
     }
     catch (const Vk::AssetLoadingException& e)
     {
@@ -486,6 +502,7 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
 	try
 	{
         cubemapTexture.LoadFromFile(cubeMapFilePath, vkDevice, queue, true);
+        SetupRTXEnviromentDescriptorSet();
 	}
     catch (const Vk::AssetLoadingException & e)
     {
@@ -505,31 +522,6 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
         if (SDL_ShowMessageBox(&messageboxdata, nullptr) < 0) {
             throw std::runtime_error("Error while trying to display SDL message box:" + std::string(SDL_GetError()));
         }
-    }
-}
-
-void CG::EngineImpl::SetupNodeDescriptorSet(Vk::GLTFModel::Node* node)
-{
-    if (node->mesh) {
-        VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-        descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        descriptorSetAllocInfo.descriptorPool = descriptorPool;
-        descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.node;
-        descriptorSetAllocInfo.descriptorSetCount = 1;
-        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocInfo, &node->mesh->uniformBuffer.descriptorSet));
-
-        VkWriteDescriptorSet writeDescriptorSet{};
-        writeDescriptorSet.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSet.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeDescriptorSet.descriptorCount = 1;
-        writeDescriptorSet.dstSet = node->mesh->uniformBuffer.descriptorSet;
-        writeDescriptorSet.dstBinding = 0;
-        writeDescriptorSet.pBufferInfo = &node->mesh->uniformBuffer.buffer.descriptor;
-
-        vkUpdateDescriptorSets(vkDevice->logicalDevice, 1, &writeDescriptorSet, 0, nullptr);
-    }
-    for (const auto& child : node->children) {
-        SetupNodeDescriptorSet(child.get());
     }
 }
 
@@ -791,6 +783,23 @@ void CG::EngineImpl::CreateNVRayTracingGeometry()
     CreateTopLevelAccelerationStructure();
 }
 
+void CG::EngineImpl::DestroyNVRayTracingGeometry()
+{
+    for (const auto& blas : blasData)
+    {
+        vkFreeMemory(vkDevice->logicalDevice, blas.memory, nullptr);
+    }
+
+    vkFreeMemory(vkDevice->logicalDevice, topLevelAS.memory, nullptr);
+
+    for (const auto& blas : blasData)
+    {
+        vkDestroyAccelerationStructureNV(vkDevice->logicalDevice, blas.accelerationStructure, nullptr);
+    }
+
+    vkDestroyAccelerationStructureNV(vkDevice->logicalDevice, topLevelAS.accelerationStructure, nullptr);
+}
+
 // TODO: Handle on resize
 void CG::EngineImpl::CreateNVRayTracingStoreImage()
 {
@@ -836,6 +845,13 @@ void CG::EngineImpl::CreateNVRayTracingStoreImage()
     vkDevice->FlushCommandBuffer(cmdBuffer, queue);
 }
 
+void CG::EngineImpl::DestroyNVRayTracingStoreImage()
+{
+    vkDestroyImageView(vkDevice->logicalDevice, storageImage.view, nullptr);
+    vkDestroyImage(vkDevice->logicalDevice, storageImage.image, nullptr);
+    vkFreeMemory(vkDevice->logicalDevice, storageImage.memory, nullptr);
+}
+
 void CG::EngineImpl::CreateShaderBindingTable()
 {
     const uint32_t sbtSize = rayTracingProperties.shaderGroupHandleSize * 3;
@@ -868,7 +884,7 @@ VkDeviceSize CG::EngineImpl::CopyShaderIdentifier(uint8_t* data, const uint8_t* 
 void CG::EngineImpl::CreateRTXPipeline()
 {
     const std::vector<VkDescriptorSetLayout> setLayouts = {
-        descriptorSetLayouts.rtxRaygenLayout, descriptorSetLayouts.rtxRayhitLayout, descriptorSetLayouts.rtxRaymissLayout,
+        descriptorSetLayouts.rtxRaygenLayout.layout, descriptorSetLayouts.rtxRayhitLayout.layout, descriptorSetLayouts.rtxRaymissLayout.layout,
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = Vk::Initializers::PipelineLayoutCreateInfo(setLayouts);
@@ -915,23 +931,44 @@ void CG::EngineImpl::CreateRTXPipeline()
     VK_CHECK_RESULT(vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1, &rayPipelineInfo, nullptr, &pipelines.RTX));
 }
 
-void CG::EngineImpl::CreateRTXDescriptorSets()
+void CG::EngineImpl::DestroyRTXPipeline()
+{
+    vkDestroyPipeline(vkDevice->logicalDevice, pipelines.RTX, nullptr);
+    vkDestroyPipelineLayout(vkDevice->logicalDevice, pipelineLayouts.rtxPipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(vkDevice->logicalDevice, descriptorSetLayouts.rtxRaygenLayout.layout, nullptr);
+    vkDestroyDescriptorSetLayout(vkDevice->logicalDevice, descriptorSetLayouts.rtxRayhitLayout.layout, nullptr);
+    // vkDestroyDescriptorSetLayout(vkDevice->logicalDevice, descriptorSetLayouts.rtxRaymissLayout.layout, nullptr);
+}
+
+void CG::EngineImpl::CreateRTXPipelineLayout()
+{
+
+}
+
+void CG::EngineImpl::DestroyRTXPipelineLayout()
+{
+
+}
+
+void CG::EngineImpl::SetupRTXModelDescriptorSets()
 {
     {
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings({
             {0, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
             {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV},
             {2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV},
-        });
+            });
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
         layoutInfo.pBindings = setLayoutBindings.data();
-        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &layoutInfo, nullptr, &descriptorSetLayouts.rtxRaygenLayout));
+        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &layoutInfo, nullptr, &descriptorSetLayouts.rtxRaygenLayout.layout));
 
-        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRaygenLayout, 1);
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRaygenLayout.layout, 1);
         VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRaygen));
+
+        descriptorSetLayouts.rtxRaygenLayout.created = true;
 
         VkWriteDescriptorSetAccelerationStructureNV descriptorAccelerationStructureInfo{};
         descriptorAccelerationStructureInfo.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_NV;
@@ -977,10 +1014,12 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
         descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
         descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.rtxRayhitLayout));
+        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.rtxRayhitLayout.layout));
 
-        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRayhitLayout, 1);
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRayhitLayout.layout, 1);
         VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRayhit));
+
+        descriptorSetLayouts.rtxRayhitLayout.created = true;
 
         std::vector<VkDescriptorBufferInfo> dbiVert;
         std::vector<VkDescriptorBufferInfo> dbiIdx;
@@ -1022,26 +1061,28 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
         };
         vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
     }
+}
 
-    {
-        std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_MISS_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // equirectangularMap
-        };
-        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
-        descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
-        descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.rtxRaymissLayout));
+void CG::EngineImpl::SetupRTXEnviromentDescriptorSet()
+{
+    std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+    { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_MISS_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV, nullptr }, // equirectangularMap
+    };
+    VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+    descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+    descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+    VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.rtxRaymissLayout.layout));
 
-        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRaymissLayout, 1);
-        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRaymiss));
+    VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRaymissLayout.layout, 1);
+    VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRaymiss));
 
-        std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
-            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaymiss, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &cubemapTexture.descriptor,  1),
-        };
-        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
-    }
+    descriptorSetLayouts.rtxRaymissLayout.created = true;
 
+    std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+        Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaymiss, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &cubemapTexture.descriptor,  1),
+    };
+    vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
 }
 
 void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
