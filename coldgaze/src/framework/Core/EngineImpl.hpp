@@ -19,7 +19,6 @@ namespace CG
 		struct UniformBufferVS;
 		class GLTFModel;
 		class ImGuiImpl;
-		class SkyBox;
 	}
 	struct EngineConfig; 
 }
@@ -100,23 +99,20 @@ namespace CG
 			VkDescriptorSetLayout node;
 			VkDescriptorSetLayout rtxRaygenLayout;
 			VkDescriptorSetLayout rtxRayhitLayout;
+			VkDescriptorSetLayout rtxRaymissLayout;
 		} descriptorSetLayouts = {};
 
         struct DescriptorSets {
             VkDescriptorSet scene;
             VkDescriptorSet rtxRaygen;
             VkDescriptorSet rtxRayhit;
+            VkDescriptorSet rtxRaymiss;
         } descriptorSets = {};
 
 		struct RenderPipelines
 		{
 			VkPipeline RTX;
 		} pipelines = {};
-
-		struct Textures
-		{
-			Vk::Texture irradianceCube;
-		} textures = {};
 
 		void FlushCommandBuffer(VkCommandBuffer commandBuffer);
 
@@ -125,7 +121,7 @@ namespace CG
 		void BuildUiCommandBuffers();
 		void BuildCommandBuffers() override;
 
-		void SetupDescriptors();
+		void SetupDescriptorsPool();
 		void BindModelMaterials();
 		void UnbindModelMaterials();
 
@@ -164,9 +160,9 @@ namespace CG
 		VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 
 		Vk::Texture2D emptyTexture;
+		Vk::Texture2D cubemapTexture;
 
 		std::unique_ptr<Vk::GLTFModel> testScene;
-		std::unique_ptr<Vk::SkyBox> testSkybox;
 
         Vk::Buffer shaderBindingTable;
 

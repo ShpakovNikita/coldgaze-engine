@@ -6,21 +6,49 @@
 #include "stb_image.h"
 #include "Render/Vulkan/Exceptions.hpp"
 
-void CG::Vk::Texture2D::LoadFromFile(const std::string& fileName, Device* device, VkQueue copyQueue)
+void CG::Vk::Texture2D::LoadFromFile(const std::string& fileName, Device* device, VkQueue copyQueue, bool loadHDR /*= false*/)
 {
     vkDevice = device;
 
     int imageWidth, imageHeight, nrComponents;
-    unsigned char* data = stbi_load(fileName.c_str(), &imageWidth, &imageHeight, &nrComponents, 0);
+	void* data;
+	if (loadHDR)
+	{
+		stbi_set_flip_vertically_on_load(true);
+		data = stbi_loadf(fileName.c_str(), &imageWidth, &imageHeight, &nrComponents, 0);
+		stbi_set_flip_vertically_on_load(false);
+	}
+	else
+	{
+		data = stbi_load(fileName.c_str(), &imageWidth, &imageHeight, &nrComponents, 0);
+	}
 
     if (data)
     {
         width = static_cast<uint32_t>(imageWidth);
         height = static_cast<uint32_t>(imageHeight);
+		uint32_t imageSize = 0;
 
-        uint32_t imageSize = width * height * 4 * sizeof(unsigned char);
+		if (loadHDR)
+		{
+			imageSize = width * height * 3 * sizeof(float);
 
-        FromBuffer(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, width, height, device, copyQueue);
+            TextureSampler loadingSampler;
+            loadingSampler.magFilter = VK_FILTER_LINEAR;
+            loadingSampler.minFilter = VK_FILTER_LINEAR;
+            loadingSampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            loadingSampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            loadingSampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+            FromBuffer(data, imageSize, VK_FORMAT_R32G32B32_SFLOAT, width, height, device,
+                copyQueue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                VK_IMAGE_TILING_LINEAR, loadingSampler);
+		}
+		else
+		{
+			imageSize = width * height * 4 * sizeof(unsigned char);
+			FromBuffer(data, imageSize, VK_FORMAT_R8G8B8A8_UNORM, width, height, device, copyQueue);
+		}
 
         stbi_image_free(data);
     }

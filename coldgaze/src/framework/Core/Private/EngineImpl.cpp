@@ -20,7 +20,6 @@
 #include <include/nfd.h>
 #include "SDL2\SDL_messagebox.h"
 #include "Render\Vulkan\Exceptions.hpp"
-#include "Render\Vulkan\SkyBox.hpp"
 #include "SDL2\SDL_events.h"
 #include "Render\Vulkan\Texture.hpp"
 #include "Render\Vulkan\Utils.hpp"
@@ -86,15 +85,14 @@ void CG::EngineImpl::Prepare()
 
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice, queue);
 
+
     LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
     LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
 
-    // CreateNVRayTracingGeometry();
     CreateNVRayTracingStoreImage();
     CreateRTXDescriptorSets();
     CreateRTXPipeline();
     CreateShaderBindingTable();
-
 
 	BuildCommandBuffers();
 
@@ -104,12 +102,10 @@ void CG::EngineImpl::Prepare()
 void CG::EngineImpl::Cleanup()
 {
     emptyTexture.Destroy();
+    cubemapTexture.Destroy();
 
-	testSkybox = nullptr;
 	testScene = nullptr;
 	imGui = nullptr;
-
-    textures.irradianceCube.Destroy();
 
 	Engine::Cleanup();
 }
@@ -205,51 +201,10 @@ void CG::EngineImpl::BuildCommandBuffers()
 	scissor.offset.x = 0;
 	scissor.offset.y = 0;
 
-    // VkDeviceSize offsets[1] = { 0 };
-
 	for (int32_t i = 0; i < drawCmdBuffers.size(); ++i)
 	{
 		renderPassBeginInfo.framebuffer = frameBuffers[i];
         VK_CHECK_RESULT(vkBeginCommandBuffer(drawCmdBuffers[i], &cmdBufInfo));
-
-        /*
-		vkCmdBeginRenderPass(drawCmdBuffers[i], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-		vkCmdSetViewport(drawCmdBuffers[i], 0, 1, &viewport);
-		vkCmdSetScissor(drawCmdBuffers[i], 0, 1, &scissor);
-
-        if (testSkybox)
-        {
-            // all pipelines placed inside class
-            testSkybox->Draw(drawCmdBuffers[i]);
-        }
-        */
-
-        /*
-        if (testScene && testScene->IsLoaded())
-        {
-            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.solidPBR_MSAA);
-
-            vkCmdBindVertexBuffers(drawCmdBuffers[i], 0, 1, &testScene->vertices.buffer.buffer, offsets);
-            if (testScene->indices.buffer.buffer != VK_NULL_HANDLE) {
-                vkCmdBindIndexBuffer(drawCmdBuffers[i], testScene->indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-            }
-
-            // Opaque primitives first
-            for (const auto& node : testScene->GetNodes()) {
-                RenderNode(node.get(), i, Vk::GLTFModel::Material::eAlphaMode::kAlphaModeOpaque);
-            }
-            // Alpha masked primitives
-            for (const auto& node : testScene->GetNodes()) {
-                RenderNode(node.get(), i, Vk::GLTFModel::Material::eAlphaMode::kAlphaModeMask);
-            }
-            // Transparent primitives
-            vkCmdBindPipeline(drawCmdBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines.solidPBR_MSAA_AlphaBlend);
-            for (const auto& node : testScene->GetNodes()) {
-                RenderNode(node.get(), i, Vk::GLTFModel::Material::eAlphaMode::kAlphaModeBlend);
-            }
-        }
-        */
 
         DrawRayTracingData(i);
 
@@ -266,28 +221,11 @@ void CG::EngineImpl::BuildCommandBuffers()
 	}
 }
 
-void CG::EngineImpl::SetupDescriptors()
+void CG::EngineImpl::SetupDescriptorsPool()
 {
     assert(testScene != nullptr);
 
-    constexpr uint32_t uniformSamplersCount = 5;
     constexpr uint32_t typePoolSize = 128;
-
-    uint32_t imageSamplerCount = 0;
-    uint32_t materialCount = 0;
-    uint32_t meshCount = 0;
-
-    // Environment samplers (env map)
-    imageSamplerCount += 1;
-
-    materialCount = static_cast<uint32_t>(testScene->GetMaterials().size());
-    imageSamplerCount += materialCount * uniformSamplersCount;
-
-    for (auto& node : testScene->GetFlatNodes()) {
-        if (node->mesh) {
-            meshCount++;
-        }
-    }
 
     std::vector<VkDescriptorPoolSize> poolSizes = 
     {
@@ -308,113 +246,11 @@ void CG::EngineImpl::SetupDescriptors()
 
     VkDescriptorPoolCreateInfo descriptorPoolCI = Vk::Initializers::DescriptorPoolCreateInfo(poolSizes, typePoolSize * static_cast<uint32_t>(poolSizes.size()));
     VK_CHECK_RESULT(vkCreateDescriptorPool(vkDevice->logicalDevice, &descriptorPoolCI, nullptr, &descriptorPool));
-
-
-    // matrices
-    {
-        std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-            { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-        };
-        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
-        descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
-        descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.scene));
-
-        VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-        descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        descriptorSetAllocInfo.descriptorPool = descriptorPool;
-        descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.scene;
-        descriptorSetAllocInfo.descriptorSetCount = 1;
-        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocInfo, &descriptorSets.scene));
-
-        std::array<VkWriteDescriptorSet, 1> writeDescriptorSets{};
-
-        writeDescriptorSets[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writeDescriptorSets[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writeDescriptorSets[0].descriptorCount = 1;
-        writeDescriptorSets[0].dstSet = descriptorSets.scene;
-        writeDescriptorSets[0].dstBinding = 0;
-        writeDescriptorSets[0].pBufferInfo = &sceneUbo.descriptor;
-
-        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
-    }
-
-    // Material (samplers)
-    {
-        std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-            { 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-            { 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-            { 3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-            { 4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr },
-        };
-        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
-        descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
-        descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
-        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.material));
-
-        // Per-Material descriptor sets
-        for (auto& material : testScene->GetMaterials()) {
-            VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-            descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            descriptorSetAllocInfo.descriptorPool = descriptorPool;
-            descriptorSetAllocInfo.pSetLayouts = &descriptorSetLayouts.material;
-            descriptorSetAllocInfo.descriptorSetCount = 1;
-            VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocInfo, &material.descriptorSet));
-
-            std::vector<VkDescriptorImageInfo> imageDescriptors = {
-                emptyTexture.descriptor,
-                emptyTexture.descriptor,
-                material.normalTexture ? material.normalTexture->texture.descriptor : emptyTexture.descriptor,
-                material.occlusionTexture ? material.occlusionTexture->texture.descriptor : emptyTexture.descriptor,
-                material.emissiveTexture ? material.emissiveTexture->texture.descriptor : emptyTexture.descriptor,
-            };
-
-            // TODO: spec gloss
-            if (material.pbrWorkflows.metallicRoughness || material.pbrWorkflows.specularGlossiness) {
-                if (material.baseColorTexture) {
-                    imageDescriptors[0] = material.baseColorTexture->texture.descriptor;
-                }
-                if (material.metallicRoughnessTexture) {
-                    imageDescriptors[1] = material.metallicRoughnessTexture->texture.descriptor;
-                }
-            }
-
-            std::array<VkWriteDescriptorSet, uniformSamplersCount> writeDescriptorSets{};
-            for (size_t i = 0; i < imageDescriptors.size(); i++) {
-                writeDescriptorSets[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writeDescriptorSets[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                writeDescriptorSets[i].descriptorCount = 1;
-                writeDescriptorSets[i].dstSet = material.descriptorSet;
-                writeDescriptorSets[i].dstBinding = static_cast<uint32_t>(i);
-                writeDescriptorSets[i].pImageInfo = &imageDescriptors[i];
-            }
-
-            vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, NULL);
-        }
-
-        // Model node (matrices)
-        {
-            std::vector<VkDescriptorSetLayoutBinding> modelSetLayoutBindings = {
-                { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
-            };
-            VkDescriptorSetLayoutCreateInfo modelDescriptorSetLayoutCI = Vk::Initializers::DescriptorSetLayoutCreateInfo(modelSetLayoutBindings);
-            VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &modelDescriptorSetLayoutCI, nullptr, &descriptorSetLayouts.node));
-
-            // Per-Node descriptor set
-            for (const auto& node : testScene->GetNodes()) {
-                SetupNodeDescriptorSet(node.get());
-            }
-        }
-
-    }
 }
 
 void CG::EngineImpl::BindModelMaterials()
 {
-    SetupDescriptors();
+    SetupDescriptorsPool();
 }
 
 void CG::EngineImpl::UnbindModelMaterials()
@@ -494,13 +330,7 @@ void CG::EngineImpl::UpdateUniformBuffers()
     sceneUboData.model[2][2] = scale;
 
     sceneUboData.cameraPos = glm::vec4(cameraComponent->position, 1.0f);
-
     sceneUbo.CopyTo(&sceneUboData, sizeof(sceneUboData));
-
-	if (testSkybox)
-	{
-		testSkybox->UpdateCameraUniformBuffer(cameraComponent);
-	}
 }
 
 void CG::EngineImpl::SetupSystems()
@@ -655,15 +485,10 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
 {
 	try
 	{
-        testSkybox = std::make_unique<Vk::SkyBox>(*this);
-        testSkybox->LoadFromFile(cubeMapFilePath, vkDevice, queue);
-		testSkybox->SetupDescriptorSet(descriptorPool);
-        testSkybox->PreparePipeline(renderPass, pipelineCache);
+        cubemapTexture.LoadFromFile(cubeMapFilePath, vkDevice, queue, true);
 	}
     catch (const Vk::AssetLoadingException & e)
     {
-		testSkybox = nullptr;
-
         std::cerr << e.what() << std::endl;
 
         const SDL_MessageBoxButtonData buttons[] = {
@@ -1043,7 +868,7 @@ VkDeviceSize CG::EngineImpl::CopyShaderIdentifier(uint8_t* data, const uint8_t* 
 void CG::EngineImpl::CreateRTXPipeline()
 {
     const std::vector<VkDescriptorSetLayout> setLayouts = {
-        descriptorSetLayouts.rtxRaygenLayout, descriptorSetLayouts.rtxRayhitLayout,
+        descriptorSetLayouts.rtxRaygenLayout, descriptorSetLayouts.rtxRayhitLayout, descriptorSetLayouts.rtxRaymissLayout,
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = Vk::Initializers::PipelineLayoutCreateInfo(setLayouts);
@@ -1197,6 +1022,25 @@ void CG::EngineImpl::CreateRTXDescriptorSets()
         };
         vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
     }
+
+    {
+        std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+            { 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_MISS_BIT_NV, nullptr }, // equirectangularMap
+        };
+        VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCI{};
+        descriptorSetLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorSetLayoutCI.pBindings = setLayoutBindings.data();
+        descriptorSetLayoutCI.bindingCount = static_cast<uint32_t>(setLayoutBindings.size());
+        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(vkDevice->logicalDevice, &descriptorSetLayoutCI, nullptr, &descriptorSetLayouts.rtxRaymissLayout));
+
+        VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = Vk::Initializers::DescriptorSetAllocateInfo(descriptorPool, &descriptorSetLayouts.rtxRaymissLayout, 1);
+        VK_CHECK_RESULT(vkAllocateDescriptorSets(vkDevice->logicalDevice, &descriptorSetAllocateInfo, &descriptorSets.rtxRaymiss));
+
+        std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaymiss, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, &cubemapTexture.descriptor,  1),
+        };
+        vkUpdateDescriptorSets(vkDevice->logicalDevice, static_cast<uint32_t>(writeDescriptorSets.size()), writeDescriptorSets.data(), 0, VK_NULL_HANDLE);
+    }
 }
 
 void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
@@ -1206,6 +1050,7 @@ void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
     const std::vector<VkDescriptorSet> descriptorsets = {
         descriptorSets.rtxRaygen,
         descriptorSets.rtxRayhit,
+        descriptorSets.rtxRaymiss,
     };
 
     vkCmdBindPipeline(drawCmdBuffers[swapChainImageIndex], VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelines.RTX);

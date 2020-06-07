@@ -1,6 +1,8 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
+layout (set = 2, binding = 0) uniform sampler2D equirectangularMap;
+
 struct RayPayload
 {
 	vec4 colorAndDistance; // rgb + t
@@ -21,5 +23,8 @@ vec2 SampleSphericalMap(vec3 v)
 
 void main()
 {
-    rayPayload.colorAndDistance.xyz = vec3(0.0, 0.0, 0.2);
+    vec2 uv = SampleSphericalMap(normalize(gl_WorldRayDirectionNV)); 
+    vec3 color = texture(equirectangularMap, uv).rgb;
+    
+    rayPayload.colorAndDistance.xyz = texture(equirectangularMap, uv).rgb;
 }
