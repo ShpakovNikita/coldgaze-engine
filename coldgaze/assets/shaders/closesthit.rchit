@@ -2,8 +2,6 @@
 #extension GL_NV_ray_tracing : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
-#define LIGHTS_COUNT 6
-
 struct RayPayload
 {
 	vec4 colorAndDistance; // rgb + t
@@ -37,6 +35,24 @@ struct Material {
 	float alphaMaskCutoff;
 };
 
+struct PBRParams {
+    float NdotL;                  // cos angle between normal and light direction
+	float NdotV;                  // cos angle between normal and view direction
+	float NdotH;                  // cos angle between normal and half vector
+	float LdotH;                  // cos angle between light direction and half vector
+	float VdotH;                  // cos angle between view direction and half vector
+    float occlusion;              // pre calculated occlusion value on the surface
+	float roughness;              // roughness value at the surface
+	float metallic;               // metallic value at the surface
+	float alphaRoughness;         // roughness * roughness
+	vec3 diffuseColor;            // color contribution from diffuse lighting
+	vec3 specularColor;           // color contribution from specular lighting
+	vec4 albedo;                  // base albedo color value
+	vec3 worldPos;                // point on surface world position
+    vec3 V; //remove
+    vec3 N; //remove
+};
+
 layout(binding = 2, set = 0) uniform UBOScene
 {
 	mat4 projection;
@@ -44,9 +60,11 @@ layout(binding = 2, set = 0) uniform UBOScene
 	mat4 view;
     vec4 cameraPos;
     
-    // vec4 because of alignment
-    vec4 lightPos[LIGHTS_COUNT];
-    vec4 lightColor[LIGHTS_COUNT];
+    mat4 invProjection;
+	mat4 invView;
+    
+    vec4 globalLightDir;
+    vec4 globalLightColor;
 } uboScene;
 
 layout(binding = 0, set = 1) readonly buffer VertexBuffers { VertexData vertices[]; } vertexBuffers[];
@@ -71,13 +89,29 @@ const float c_MinRoughness = 0.04;
 const float DIELECTRIC_REFLECTION_APPROXIMATION = 0.04;
 const float PI = 3.14159265359;
 
-// Approximation of microfacets towards half-vector using Normal Distribution
-float NDF_GGXTR(vec3 N, vec3 H, float roughness)
+#define MANUAL_SRGB 1
+
+vec4 SRGBtoLINEAR(vec4 srgbIn)
 {
-    float a = roughness * roughness;
+	#ifdef MANUAL_SRGB
+	#ifdef SRGB_FAST_APPROXIMATION
+	vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
+	#else //SRGB_FAST_APPROXIMATION
+	vec3 bLess = step(vec3(0.04045),srgbIn.xyz);
+	vec3 linOut = mix( srgbIn.xyz/vec3(12.92), pow((srgbIn.xyz+vec3(0.055))/vec3(1.055),vec3(2.4)), bLess );
+	#endif //SRGB_FAST_APPROXIMATION
+	return vec4(linOut,srgbIn.w);;
+	#else //MANUAL_SRGB
+	return srgbIn;
+	#endif //MANUAL_SRGB
+}
+
+// Approximation of microfacets towards half-vector using Normal Distribution
+float NDF_GGXTR(PBRParams pbrParams)
+{
+    float a = pbrParams.alphaRoughness;
     float a2 = a * a;
-    float NdotH = max(dot(N, H), 0.0);
-    float NdotH2 = NdotH * NdotH;
+    float NdotH2 = pbrParams.NdotH * pbrParams.NdotH;
 	
     float nom = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
@@ -87,58 +121,51 @@ float NDF_GGXTR(vec3 N, vec3 H, float roughness)
 }
 
 // Geometry function
-float G_SchlickGGX(float NdotV, float roughness)
+float G_SchlickGGX(float cosTheta, float alphaRoughness)
 {
-    float r = (roughness + 1.0);
-    float k = (r*r) / 8.0;
+    float r = alphaRoughness;
+    float r2 = r * r;
 
-    float num   = NdotV;
-    float denom = NdotV * (1.0 - k) + k;
+    float num   = 2.0 * cosTheta;
+    float denom = cosTheta + sqrt(r2 + (1.0 - r2) * (cosTheta * cosTheta));
 	
     return num / denom;
 }
 
 // This method covers geometry obstruction and shadowing cases
-float G_Smith(vec3 N, vec3 V, vec3 L, float k)
+float G_Smith(PBRParams pbrParams)
 {
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotL = max(dot(N, L), 0.0);
-    float ggx1 = G_SchlickGGX(NdotV, k);
-    float ggx2 = G_SchlickGGX(NdotL, k);
+    float ggx1 = G_SchlickGGX(pbrParams.NdotV, pbrParams.alphaRoughness);
+    float ggx2 = G_SchlickGGX(pbrParams.NdotL, pbrParams.alphaRoughness);
 	
     return ggx1 * ggx2;
 }
 
 // Fresnel function
-vec3 F_Schlick(float cosTheta, vec3 F0)
+vec3 F_Schlick(PBRParams pbrParams)
 {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+    return pbrParams.specularColor + (1.0 - pbrParams.specularColor) * pow(clamp(1.0 - pbrParams.VdotH, 0.0, 1.0), 5.0);
 }
 
 // Result reflection
-vec3 BRDF_CookTorrance(float roughness, float metallic, vec3 albedo, vec3 N, vec3 V, vec3 F0, vec3 lightPos, vec3 lightColor, VertexData vertexData)
+vec3 BRDF_CookTorrance(vec3 lightColor, VertexData vertexData, PBRParams pbrParams)
 {
-    vec3 L = normalize(vertexData.inPos.xyz - lightPos);	
-    vec3 H = normalize(V + L);
-    float distance = length(lightPos - vertexData.inPos.xyz);
-    float attenuation = 1.0 / (distance * distance);
-    vec3 radiance = lightColor * attenuation;        
-    
     // Cook-Torrance BRDF
-    float NDF = NDF_GGXTR(N, H, roughness);        
-    float G = G_Smith(N, V, L, roughness);      
-    vec3 F = F_Schlick(max(dot(H, V), 0.0), F0);       
+    float NDF = NDF_GGXTR(pbrParams);        
+    float G = G_Smith(pbrParams);      
+    vec3 F = F_Schlick(pbrParams);
     
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallic;	  
+    vec3 num = NDF * G * F;
+    float denom = 4.0 * pbrParams.NdotV * pbrParams.NdotL;
+    vec3 specularContrib = num / max(denom, 0.001);  
     
-    vec3 numerator = NDF * G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0);
-    vec3 specular = numerator / max(denominator, 0.001);  
+    // Lambert diffuse part of the equation
+    vec3 diffuseContrib = (1.0 - F) * (pbrParams.diffuseColor / PI);
     
-    float NdotL = max(dot(N, L), 0.0);                
-    return (kD * albedo.xyz / PI + specular) * radiance * NdotL; 
+    vec3 finalColor = pbrParams.NdotL * lightColor * (diffuseContrib + specularContrib);
+    finalColor *= pbrParams.occlusion;
+    
+    return vec3(NDF); // pbrParams.specularColor; // finalColor;
 }
 
 vec2 dFdy(vec2 p)
@@ -162,10 +189,10 @@ vec3 dFdx(vec3 p)
 }
 
 // More info http://www.thetenthplanet.de/archives/1180
-vec3 perturbNormal(VertexData vertexData, Material material)
+vec3 perturbNormal(VertexData vertexData, Material material, vec3 worldPos)
 {
-    // return normalize(vertexData.inNormal.xyz);
-
+    vec3 worldNormal = normalize(gl_ObjectToWorldNV * vertexData.inNormal);
+    
 	vec3 tangentNormal;
     vec2 inUV;
  
@@ -173,20 +200,43 @@ vec3 perturbNormal(VertexData vertexData, Material material)
         inUV = material.normalTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw;
         tangentNormal = texture(normalTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], inUV).xyz * 2.0 - 1.0;
     } else {
-        return normalize(vertexData.inNormal.xyz);
+        return worldNormal;
     }
 
-	vec3 q1 = dFdx(vertexData.inPos.xyz);
-	vec3 q2 = dFdy(vertexData.inPos.xyz);
+	vec3 q1 = dFdx(worldPos);
+	vec3 q2 = dFdy(worldPos);
 	vec2 st1 = dFdx(inUV);
 	vec2 st2 = dFdy(inUV);
 
 	vec3 T = normalize(q1 * st2.t - q2 * st1.t);
-    vec3 N = normalize(vertexData.inNormal.xyz);
+    vec3 N = normalize(worldNormal);
 	vec3 B = -normalize(cross(N, T));
 	mat3 TBN = mat3(T, B, N);
 
 	return normalize(TBN * tangentNormal);
+}
+
+vec3 Uncharted2Tonemap(vec3 color)
+{
+	float A = 0.15;
+	float B = 0.50;
+	float C = 0.10;
+	float D = 0.20;
+	float E = 0.02;
+	float F = 0.30;
+	float W = 11.2;
+	return ((color*(A*color+C*B)+D*E)/(color*(A*color+B)+D*F))-E/F;
+}
+
+vec4 Tonemap(vec4 color)
+{
+    // TODO: move to uniforms 
+    float gamma = 1.0f;
+    float exposure = 1.0f;
+
+	vec3 outcol = Uncharted2Tonemap(color.rgb * exposure);
+	outcol = outcol * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
+	return vec4(pow(outcol, vec3(1.0f / gamma)), color.a);
 }
 
 vec2 BaryLerp(vec2 a, vec2 b, vec2 c, vec3 barycentrics)
@@ -220,6 +270,73 @@ VertexData FetchVertexData(uint offset)
     return vertexBuffers[nonuniformEXT(gl_InstanceCustomIndexNV)].vertices[index];
 }
 
+PBRParams GetPBRParams(VertexData vertexData, Material material)
+{
+    vec4 albedo;
+    if (material.baseColorTextureSet > -1) {
+        albedo = texture(baseColorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], 
+            material.baseColorTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw);
+    } else {
+        albedo = vec4(1.0); // material.baseColorFactor;
+    }
+
+    vec3 worldPos = gl_WorldRayOriginNV + gl_HitTNV * gl_WorldRayDirectionNV;
+    
+    vec3 N = perturbNormal(vertexData, material, worldPos);
+    vec3 V = normalize(gl_WorldRayOriginNV - worldPos);
+    vec3 L = normalize(uboScene.globalLightDir.xyz);	
+    vec3 H = normalize(V + L);
+    
+    float occlusion = 1.0f;
+    float roughness = material.roughnessFactor;
+    float metallic = material.metallicFactor;
+    
+    if (material.physicalDescriptorTextureSet > -1) {
+        vec4 mrSample = texture(physicalDescriptorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], material.physicalDescriptorTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw);
+        roughness = mrSample.g * roughness;
+        metallic = mrSample.b * metallic;
+    } else {
+        roughness = clamp(roughness, c_MinRoughness, 1.0);
+        metallic = clamp(metallic, 0.0, 1.0);
+    }
+    
+    if (material.occlusionTextureSet > -1) {
+        occlusion = texture(ambientOcclusionTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], (material.occlusionTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw)).r;
+    }
+    
+    vec3 F0 = vec3(0.04); 
+    vec3 specularColor = mix(F0, albedo.rgb, metallic);
+    
+    vec3 diffuseColor = albedo.rgb * (vec3(1.0) - F0);
+    diffuseColor *= 1.0 - metallic;
+    
+    float NdotL = clamp(dot(N, L), 0.001, 1.0);
+    float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
+    float NdotH = clamp(dot(N, H), 0.0, 1.0);
+    float LdotH = clamp(dot(L, H), 0.0, 1.0);
+    float VdotH = clamp(dot(V, H), 0.0, 1.0);
+    
+    PBRParams pbrParams = PBRParams(
+        NdotL,
+        NdotV,
+        NdotH,
+        LdotH,
+        VdotH,
+        occlusion,
+        roughness,
+        metallic,
+        roughness * roughness,
+        diffuseColor,
+        specularColor,
+        albedo,
+        worldPos,
+        V,
+        N
+    );
+    
+    return pbrParams;
+}
+
 void main()
 {
     const vec3 barycentrics = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
@@ -231,55 +348,16 @@ void main()
     const VertexData vertexData = BaryLerp(v0, v1, v2, barycentrics);
     const Material material = materialBuffers[nonuniformEXT(gl_InstanceCustomIndexNV)].material;
     
-    vec4 albedo;
-    if (material.baseColorTextureSet > -1) {
-        albedo = texture(baseColorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], 
-            material.baseColorTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw) * material.baseColorFactor;
-    } else {
-        albedo = material.baseColorFactor;
-    }
-    
     if (material.workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
-        vec3 N = perturbNormal(vertexData, material);
-        vec3 V = normalize(uboScene.cameraPos.xyz - vertexData.inPos.xyz);
-        
-        float occlusion = 1.0f;
-        float roughness = material.roughnessFactor;
-        float metallic = material.metallicFactor;
-        
-        if (material.physicalDescriptorTextureSet > -1) {
-			// Roughness is stored in the 'g' channel, metallic is stored in the 'b' channel.
-			// This layout intentionally reserves the 'r' channel for (optional) occlusion map data
-			vec4 mrSample = texture(physicalDescriptorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], material.physicalDescriptorTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw);
-			roughness = mrSample.g * roughness;
-			metallic = mrSample.b * metallic;
-		} else {
-			roughness = clamp(roughness, c_MinRoughness, 1.0);
-			metallic = clamp(metallic, 0.0, 1.0);
-		}
-        
-        if (material.occlusionTextureSet > -1) {
-            float occlusion = texture(ambientOcclusionTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], (material.occlusionTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw)).r;
-        }
-        
-        vec3 F0 = vec3(0.04); 
-        F0 = mix(F0, albedo.xyz, metallic);
+        PBRParams pbrParams = GetPBRParams(vertexData, material);
         
         vec3 radiance = vec3(0.0);
-        for (int i = 0; i < LIGHTS_COUNT; ++i)
-        {			
-            radiance += BRDF_CookTorrance(roughness, metallic, albedo.xyz, N, V, F0, uboScene.lightPos[i].xyz, uboScene.lightColor[i].xyz, vertexData);
-        }
-        
-        vec3 ambient = vec3(0.03) * albedo.xyz * occlusion;
-        vec3 diffuseColor = ambient + radiance;   
-        
-        // Tone compression 
-        diffuseColor = diffuseColor / (diffuseColor + vec3(1.0));
-        diffuseColor = pow(diffuseColor, vec3(1.0/2.2));  
-        
-        rayPayload.colorAndDistance.xyz = diffuseColor;
+        radiance += BRDF_CookTorrance(uboScene.globalLightColor.rgb, vertexData, pbrParams);
+  
+        vec3 resultColor = radiance;
+  
+        rayPayload.colorAndDistance.xyz = resultColor;
     }
     else
     {

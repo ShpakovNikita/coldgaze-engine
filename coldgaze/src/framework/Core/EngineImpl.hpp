@@ -73,14 +73,6 @@ namespace CG
 
 		} uiData = {};
 
-        struct ShaderUniformData
-        {
-            glm::mat4 projection;
-            glm::mat4 view;
-            std::array<glm::vec4, 6> lightPosPushConstants;
-            std::array<glm::vec4, 6> lightColorPushConstants;
-        } uboData = {};
-
         struct SceneShaderUniformData
         {
             glm::mat4 projection;
@@ -88,11 +80,13 @@ namespace CG
             glm::mat4 view;
 			glm::vec4 cameraPos;
 
-            std::array<glm::vec4, 6> lightPosPushConstants;
-            std::array<glm::vec4, 6> lightColorPushConstants;
+            glm::mat4 invProjection;
+            glm::mat4 invView;
+
+            glm::vec4 globalLightDir;
+            glm::vec4 globalLightColor;
         } sceneUboData = {};
 
-		Vk::Buffer ubo;
 		Vk::Buffer sceneUbo;
 
         struct DescriptorSetLayout

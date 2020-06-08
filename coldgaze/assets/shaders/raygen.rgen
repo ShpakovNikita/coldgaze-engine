@@ -8,8 +8,6 @@ struct RayPayload
 	uint randomSeed;
 };
 
-#define LIGHTS_COUNT 6
-
 layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
 layout(binding = 1, set = 0, rgba8) uniform image2D image;
 layout(binding = 2, set = 0) uniform UBOScene
@@ -19,9 +17,11 @@ layout(binding = 2, set = 0) uniform UBOScene
 	mat4 view;
     vec4 cameraPos;
     
-    // vec4 because of alignment
-    vec4 lightPos[LIGHTS_COUNT];
-    vec4 lightColor[LIGHTS_COUNT];
+    mat4 invProjection;
+	mat4 invView;
+    
+    vec4 globalLightDir;
+    vec4 globalLightColor;
 } uboScene;
 
 layout(location = 0) rayPayloadNV RayPayload rayPayload;
@@ -32,10 +32,9 @@ void main()
 	const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeNV.xy);
 	vec2 d = inUV * 2.0 - 1.0;
 
-    mat4 viewInv = inverse(uboScene.view);
-	vec4 origin = viewInv * vec4(0,0,0,1);
-	vec4 target = inverse(uboScene.projection) * vec4(d.x, d.y, 1, 1);
-	vec4 direction = viewInv * vec4(normalize(target.xyz), 0);
+	vec4 origin = uboScene.invView * vec4(0,0,0,1);
+	vec4 target = uboScene.invProjection * vec4(d.x, d.y, 1, 1);
+	vec4 direction = uboScene.invView * vec4(normalize(target.xyz), 0);
 
 	uint rayFlags = gl_RayFlagsOpaqueNV;
 	uint cullMask = 0xff;

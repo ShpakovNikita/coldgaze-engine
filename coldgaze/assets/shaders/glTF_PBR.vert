@@ -15,10 +15,12 @@ layout (set = 0, binding = 0) uniform UBOScene
 	mat4 model;
 	mat4 view;
     vec4 cameraPos;
-        
-    // vec4 because of alignment
-    vec4 lightPos[LIGHTS_COUNT];
-    vec4 lightColor[LIGHTS_COUNT];
+    
+    mat4 invProjection;
+	mat4 invView;
+    
+    vec4 globalLightDir;
+    vec4 globalLightColor;
 } uboScene;
 
 #define MAX_NUM_JOINTS 128
@@ -42,24 +44,6 @@ layout (location = 3) out vec2 outUV1;
 
 void main() 
 {
-    /*
-	vec4 locPos;
-	if (node.jointCount > 0.0) {
-		// Mesh is skinned
-		mat4 skinMat = 
-			inWeight0.x * node.jointMatrix[int(inJoint0.x)] +
-			inWeight0.y * node.jointMatrix[int(inJoint0.y)] +
-			inWeight0.z * node.jointMatrix[int(inJoint0.z)] +
-			inWeight0.w * node.jointMatrix[int(inJoint0.w)];
-
-		locPos = uboScene.model * node.matrix * skinMat * vec4(inPos, 1.0);
-		outNormal = normalize(transpose(inverse(mat3(uboScene.model * node.matrix * skinMat))) * inNormal);
-	} else {
-		locPos = uboScene.model * node.matrix * vec4(inPos, 1.0);
-		outNormal = normalize(transpose(inverse(mat3(uboScene.model * node.matrix))) * inNormal);
-	}
-
-    */
     vec4 locPos = uboScene.model * node.matrix * vec4(inPos, 1.0);
     outNormal = normalize(transpose(inverse(mat3(uboScene.model * node.matrix))) * inNormal);
     

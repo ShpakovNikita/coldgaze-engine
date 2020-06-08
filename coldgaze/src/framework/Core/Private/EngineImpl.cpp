@@ -88,7 +88,7 @@ void CG::EngineImpl::Prepare()
 
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice, queue);
     LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
-    LoadModelAsync(GetAssetPath() + "models/FlightHelmet/glTF/FlightHelmet.gltf");
+    LoadModelAsync("D:/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
 
     // CreateRTXPipeline();
     CreateShaderBindingTable();
@@ -232,7 +232,7 @@ void CG::EngineImpl::BuildCommandBuffers()
 
 void CG::EngineImpl::SetupDescriptorsPool()
 {
-    constexpr uint32_t typePoolSize = 128;
+    constexpr uint32_t typePoolSize = 1024;
 
     std::vector<VkDescriptorPoolSize> poolSizes = 
     {
@@ -271,22 +271,12 @@ void CG::EngineImpl::PrepareUniformBuffers()
 	CameraComponent& component = registry.assign<CameraComponent>(cameraEntity);
 
 	component.vkDevice = vkDevice;
-	// component.uniformBufferVS.PrepareUniformBuffers(vkDevice, sizeof(component.uboVS));
 	component.viewport.height = engineConfig.height;
 	component.viewport.width = engineConfig.width;
 
 	uniformBufferVS = &component.uniformBufferVS;
 
 	cameraComponent = &component;
-
-	VK_CHECK_RESULT(vkDevice->CreateBuffer(
-		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		&ubo,
-		sizeof(uboData)));
-
-	// Map persistent
-	VK_CHECK_RESULT(ubo.Map());
 
 	VK_CHECK_RESULT(vkDevice->CreateBuffer(
 		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -300,34 +290,24 @@ void CG::EngineImpl::PrepareUniformBuffers()
 
 void CG::EngineImpl::UpdateUniformBuffers()
 {
-	uboData.projection = cameraComponent->uboVS.projectionMatrix;
-	uboData.view = cameraComponent->uboVS.viewMatrix;
-	uboData.lightPosPushConstants.fill(glm::vec4(0.0f));
-	uboData.lightColorPushConstants.fill(glm::vec4(0.0f));
+    glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
 
-    uboData.lightPosPushConstants[0] = glm::vec4(1.5f, 1.5f, -1.5f, 0.0f);
-    uboData.lightColorPushConstants[0] = glm::vec4(23.47f, 21.31f, 20.79f, 0.0f);
+    sceneUboData.globalLightDir = glm::vec4(
+        sin(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)),
+        sin(glm::radians(rotation.y)),
+        cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)),
+        0.0f);
+        
 
-    uboData.lightPosPushConstants[1] = glm::vec4(-1.5f, 1.0f, -1.0f, 0.0f);
-    uboData.lightColorPushConstants[1] = glm::vec4(16.47f, 11.31f, 22.79f, 0.0f) * 0.1f;
+        // glm::normalize(glm::vec4({ 0.33f, 0.66f, 0.33f, 0.0f }));
 
-    uboData.lightPosPushConstants[2] = glm::vec4(0.1f, 2.5f, -1.5f, 0.0f);
-    uboData.lightColorPushConstants[2] = glm::vec4(13.47f, 25.31f, 23.79f, 0.0f) * 0.03f;
-
-    uboData.lightPosPushConstants[3] = glm::vec4(1.5f, -1.5f, 1.5f, 0.0f);
-    uboData.lightColorPushConstants[3] = glm::vec4(14.47f, 11.31f, 27.79f, 0.0f) * 0.04f;
-
-	ubo.CopyTo(&uboData, sizeof(uboData));
-
-
-    for (size_t i = 0; i < uboData.lightPosPushConstants.size(); ++i)
-    {
-        sceneUboData.lightPosPushConstants[i] = uboData.lightPosPushConstants[i];
-        sceneUboData.lightColorPushConstants[i] = uboData.lightColorPushConstants[i];
-    }
+    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }); // glm::vec4({ 23.0f, 11.0f, 15.0f, 1.0f }) * 0.1f;
 
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
+
+    sceneUboData.invProjection = glm::inverse(sceneUboData.projection);
+    sceneUboData.invView = glm::inverse(sceneUboData.view);
 
     float scale = (1.0f / std::max(testScene->GetSize().x, std::max(testScene->GetSize().y, testScene->GetSize().z))) * 0.5f;
 
@@ -528,6 +508,10 @@ void CG::EngineImpl::LoadSkybox(const std::string& cubeMapFilePath)
 void CG::EngineImpl::CreateBottomLevelAccelerationStructure(const VkGeometryNV* geometries, uint32_t blasIndex, size_t geomCount)
 {
     AccelerationStructure& bottomLevelAS = blasData[blasIndex];
+
+
+
+
 
     // Prepare handle
     {
@@ -800,7 +784,6 @@ void CG::EngineImpl::DestroyNVRayTracingGeometry()
     vkDestroyAccelerationStructureNV(vkDevice->logicalDevice, topLevelAS.accelerationStructure, nullptr);
 }
 
-// TODO: Handle on resize
 void CG::EngineImpl::CreateNVRayTracingStoreImage()
 {
     VkImageCreateInfo image = Vk::Initializers::ImageCreateInfo();
@@ -998,6 +981,7 @@ void CG::EngineImpl::SetupRTXModelDescriptorSets()
     }
 
     {
+
         uint32_t primCount = static_cast<uint32_t>(testScene->GetPrimitivesCount());
 
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
