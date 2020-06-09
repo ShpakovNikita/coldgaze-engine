@@ -5,8 +5,9 @@ layout (set = 2, binding = 0) uniform sampler2D equirectangularMap;
 
 struct RayPayload
 {
-	vec4 colorAndDistance; // rgb + t
+	vec4 radianceAndDistance; // rgb + a (t)
 	vec4 scatterDirection; // xyz + w (is scatter needed)
+    vec4 ambient;
 	uint randomSeed;
 };
 
@@ -26,5 +27,8 @@ void main()
     vec2 uv = SampleSphericalMap(normalize(gl_WorldRayDirectionNV)); 
     vec3 color = texture(equirectangularMap, uv).rgb;
     
-    rayPayload.colorAndDistance.xyz = texture(equirectangularMap, uv).rgb;
+    rayPayload.ambient.rgb = texture(equirectangularMap, uv).rgb;
+    rayPayload.radianceAndDistance.rgb = rayPayload.ambient.rgb;
+    rayPayload.radianceAndDistance.a = 0.0;
+    rayPayload.scatterDirection.w = 0.0;
 }

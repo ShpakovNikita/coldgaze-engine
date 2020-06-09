@@ -299,15 +299,15 @@ void CG::EngineImpl::UpdateUniformBuffers()
         0.0f);
 
     sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 20.0f; // glm::vec4({ 23.0f, 11.0f, 15.0f, 1.0f }) * 0.1f;
-
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
-
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
 
     sceneUboData.invProjection = glm::inverse(sceneUboData.projection);
     sceneUboData.invView = glm::inverse(sceneUboData.view);
 
     float scale = (1.0f / std::max(testScene->GetSize().x, std::max(testScene->GetSize().y, testScene->GetSize().z))) * 0.5f;
+
+
 
     sceneUboData.model = glm::mat4(1.0f);
     sceneUboData.model[0][0] = scale;

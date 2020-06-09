@@ -4,8 +4,9 @@
 
 struct RayPayload
 {
-	vec4 colorAndDistance; // rgb + t
-	vec4 scatterDirection; // xyz + w (is scatter needed)
+	vec4 radianceAndDistance; // rgb + t
+	vec4 scatterDirection;
+    vec4 ambient;
 	uint randomSeed;
 };
 
@@ -49,8 +50,7 @@ struct PBRParams {
 	vec3 specularColor;           // color contribution from specular lighting
 	vec4 albedo;                  // base albedo color value
 	vec3 worldPos;                // point on surface world position
-    vec3 V; //remove
-    vec3 N; //remove
+    vec3 N;                       // World normal
 };
 
 layout(binding = 2, set = 0) uniform UBOScene
@@ -89,45 +89,28 @@ const float c_MinRoughness = 0.04;
 const float DIELECTRIC_REFLECTION_APPROXIMATION = 0.04;
 const float PI = 3.14159265359;
 
-#define MANUAL_SRGB 1
-
-vec4 SRGBtoLINEAR(vec4 srgbIn)
-{
-	#ifdef MANUAL_SRGB
-	#ifdef SRGB_FAST_APPROXIMATION
-	vec3 linOut = pow(srgbIn.xyz,vec3(2.2));
-	#else //SRGB_FAST_APPROXIMATION
-	vec3 bLess = step(vec3(0.04045),srgbIn.xyz);
-	vec3 linOut = mix( srgbIn.xyz/vec3(12.92), pow((srgbIn.xyz+vec3(0.055))/vec3(1.055),vec3(2.4)), bLess );
-	#endif //SRGB_FAST_APPROXIMATION
-	return vec4(linOut,srgbIn.w);;
-	#else //MANUAL_SRGB
-	return srgbIn;
-	#endif //MANUAL_SRGB
-}
-
 // Approximation of microfacets towards half-vector using Normal Distribution
 float NDF_GGXTR(PBRParams pbrParams)
 {
-    float a = pbrParams.alphaRoughness;
-    float a2 = a * a;
+    float a      = pbrParams.alphaRoughness;
+    float a2     = a * a;
     float NdotH2 = pbrParams.NdotH * pbrParams.NdotH;
 	
-    float nom = a2;
+    float num   = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
     denom = PI * denom * denom;
 	
-    return nom / denom;
+    return num / denom;
 }
 
 // Geometry function
-float G_SchlickGGX(float cosTheta, float alphaRoughness)
+float G_SchlickGGX(float cosTheta, float roughness)
 {
-    float r = alphaRoughness;
-    float r2 = r * r;
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
 
-    float num   = 2.0 * cosTheta;
-    float denom = cosTheta + sqrt(r2 + (1.0 - r2) * (cosTheta * cosTheta));
+    float num   = cosTheta;
+    float denom = cosTheta * (1.0 - k) + k;
 	
     return num / denom;
 }
@@ -135,8 +118,8 @@ float G_SchlickGGX(float cosTheta, float alphaRoughness)
 // This method covers geometry obstruction and shadowing cases
 float G_Smith(PBRParams pbrParams)
 {
-    float ggx1 = G_SchlickGGX(pbrParams.NdotV, pbrParams.alphaRoughness);
-    float ggx2 = G_SchlickGGX(pbrParams.NdotL, pbrParams.alphaRoughness);
+    float ggx1 = G_SchlickGGX(pbrParams.NdotV, pbrParams.roughness);
+    float ggx2 = G_SchlickGGX(pbrParams.NdotL, pbrParams.roughness);
 	
     return ggx1 * ggx2;
 }
@@ -159,13 +142,12 @@ vec3 BRDF_CookTorrance(vec3 lightColor, VertexData vertexData, PBRParams pbrPara
     float denom = 4.0 * pbrParams.NdotV * pbrParams.NdotL;
     vec3 specularContrib = num / max(denom, 0.001);  
     
-    // Lambert diffuse part of the equation
-    vec3 diffuseContrib = (1.0 - F) * (pbrParams.diffuseColor / PI);
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+      
+    kD *= 1.0 - pbrParams.metallic;	 
     
-    vec3 finalColor = pbrParams.NdotL * lightColor * (diffuseContrib + specularContrib);
-    finalColor *= pbrParams.occlusion;
-    
-    return vec3(NDF); // pbrParams.specularColor; // finalColor;
+    return (kD * pbrParams.albedo.rgb / PI + specularContrib) * lightColor * pbrParams.NdotL;
 }
 
 vec2 dFdy(vec2 p)
@@ -214,29 +196,6 @@ vec3 perturbNormal(VertexData vertexData, Material material, vec3 worldPos)
 	mat3 TBN = mat3(T, B, N);
 
 	return normalize(TBN * tangentNormal);
-}
-
-vec3 Uncharted2Tonemap(vec3 color)
-{
-	float A = 0.15;
-	float B = 0.50;
-	float C = 0.10;
-	float D = 0.20;
-	float E = 0.02;
-	float F = 0.30;
-	float W = 11.2;
-	return ((color*(A*color+C*B)+D*E)/(color*(A*color+B)+D*F))-E/F;
-}
-
-vec4 Tonemap(vec4 color)
-{
-    // TODO: move to uniforms 
-    float gamma = 1.0f;
-    float exposure = 1.0f;
-
-	vec3 outcol = Uncharted2Tonemap(color.rgb * exposure);
-	outcol = outcol * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
-	return vec4(pow(outcol, vec3(1.0f / gamma)), color.a);
 }
 
 vec2 BaryLerp(vec2 a, vec2 b, vec2 c, vec3 barycentrics)
@@ -330,11 +289,33 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
         specularColor,
         albedo,
         worldPos,
-        V,
         N
     );
     
     return pbrParams;
+}
+
+vec3 Uncharted2Tonemap(vec3 color)
+{
+	float A = 0.15;
+	float B = 0.50;
+	float C = 0.10;
+	float D = 0.20;
+	float E = 0.02;
+	float F = 0.30;
+	float W = 11.2;
+	return ((color*(A*color+C*B)+D*E)/(color*(A*color+B)+D*F))-E/F;
+}
+
+vec4 Tonemap(vec4 color)
+{
+    // TODO: move to uniforms 
+    float gamma = 1.0f;
+    float exposure = 1.0f;
+
+	vec3 outcol = Uncharted2Tonemap(color.rgb * exposure);
+	outcol = outcol * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
+	return vec4(pow(outcol, vec3(1.0f / gamma)), color.a);
 }
 
 void main()
@@ -355,12 +336,16 @@ void main()
         vec3 radiance = vec3(0.0);
         radiance += BRDF_CookTorrance(uboScene.globalLightColor.rgb, vertexData, pbrParams);
   
-        vec3 resultColor = radiance;
-  
-        rayPayload.colorAndDistance.xyz = resultColor;
+        vec3 ambient = vec3(0.04) * pbrParams.albedo.rgb * pbrParams.occlusion; 
+        
+        rayPayload.ambient.rgb = ambient.rgb;
+        rayPayload.radianceAndDistance.rgb = radiance; // Tonemap(vec4(resultColor, 0.0)).rgb;
+        rayPayload.radianceAndDistance.w = gl_HitTNV;
+        rayPayload.scatterDirection.xyz = reflect(gl_WorldRayDirectionNV, pbrParams.N);
+        rayPayload.scatterDirection.w = 1.0;
     }
     else
     {
-        rayPayload.colorAndDistance.xyz = vec3(1.0, 0.0, 0.0);
+        rayPayload.radianceAndDistance.xyz = vec3(1.0, 0.0, 0.0);
     }
 }
