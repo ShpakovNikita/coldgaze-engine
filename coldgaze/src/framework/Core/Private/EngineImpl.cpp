@@ -297,13 +297,11 @@ void CG::EngineImpl::UpdateUniformBuffers()
         sin(glm::radians(rotation.y)),
         cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)),
         0.0f);
-        
 
-        // glm::normalize(glm::vec4({ 0.33f, 0.66f, 0.33f, 0.0f }));
-
-    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }); // glm::vec4({ 23.0f, 11.0f, 15.0f, 1.0f }) * 0.1f;
+    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 20.0f; // glm::vec4({ 23.0f, 11.0f, 15.0f, 1.0f }) * 0.1f;
 
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
+
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
 
     sceneUboData.invProjection = glm::inverse(sceneUboData.projection);
