@@ -6,10 +6,9 @@
 struct LightComponent;
 
 class LightSystem
-	: public ICGSystem
-{
+    : public ICGSystem {
 public:
-	void Update(float deltaTime, entt::registry& registry) override;
+    void Update(float deltaTime, entt::registry& registry) override;
 
-	virtual ~LightSystem() = default;
+    virtual ~LightSystem() = default;
 };

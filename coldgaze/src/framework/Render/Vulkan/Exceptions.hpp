@@ -2,14 +2,14 @@
 
 #include <vcruntime_exception.h>
 
+namespace CG {
+namespace Vk {
 
-namespace CG
-{
-    namespace Vk
-    {
-        struct AssetLoadingException : public std::exception
+    struct AssetLoadingException : public std::exception {
+        AssetLoadingException(const char* msg)
+            : std::exception(msg)
         {
-            AssetLoadingException(const char* msg) : std::exception(msg) {}
-        };
-    }
+        }
+    };
+}
 }

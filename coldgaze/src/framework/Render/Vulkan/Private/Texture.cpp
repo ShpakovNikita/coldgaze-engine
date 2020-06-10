@@ -14,10 +14,8 @@ void CG::Vk::Texture::Destroy()
 {
     vkDestroyImageView(vkDevice->logicalDevice, view, nullptr);
     vkDestroyImage(vkDevice->logicalDevice, image, nullptr);
-    if (sampler)
-    {
+    if (sampler) {
         vkDestroySampler(vkDevice->logicalDevice, sampler, nullptr);
     }
     vkFreeMemory(vkDevice->logicalDevice, deviceMemory, nullptr);
 }
-

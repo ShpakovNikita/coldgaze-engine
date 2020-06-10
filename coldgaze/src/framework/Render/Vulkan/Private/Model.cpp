@@ -5,87 +5,87 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #define STBI_MSC_SECURE_CRT
 
-#pragma warning(push, 0)        
-#include <glm/gtc/type_ptr.hpp>
+#pragma warning(push, 0)
 #include "glm/ext/matrix_transform.hpp"
+#include <glm/gtc/type_ptr.hpp>
 #pragma warning(pop)
 
-#include "tinygltf/tiny_gltf.h"
-#include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Debug.hpp"
-#include <mutex>
+#include "Render/Vulkan/Device.hpp"
 #include "Render/Vulkan/Exceptions.hpp"
 #include "glm/common.hpp"
+#include "tinygltf/tiny_gltf.h"
+#include <mutex>
 
-namespace SGLTFModel
+namespace SGLTFModel {
+using UString = std::basic_string<uint8_t>;
+
+UString FloatToUnsignedColor(const glm::vec4 color)
 {
-	using UString = std::basic_string<uint8_t>;
+    return {
+        static_cast<uint8_t>(color.r * 255.0f),
+        static_cast<uint8_t>(color.g * 255.0f),
+        static_cast<uint8_t>(color.b * 255.0f),
+        static_cast<uint8_t>(color.a * 255.0f),
+    };
+}
 
-	UString FloatToUnsignedColor(const glm::vec4 color)
-	{
-		return { 
-			static_cast<uint8_t>(color.r * 255.0f),
-			static_cast<uint8_t>(color.g * 255.0f),
-			static_cast<uint8_t>(color.b * 255.0f),
-			static_cast<uint8_t>(color.a * 255.0f),
-		};
-	}
-
-    CG::Vk::GLTFModel::Node* FindNode(CG::Vk::GLTFModel::Node* parent, uint32_t index) {
-        CG::Vk::GLTFModel::Node* nodeFound = nullptr;
-        if (parent->index == index) {
-            return parent;
-        }
-        for (auto& child : parent->children) {
-            nodeFound = FindNode(child.get(), index);
-            if (nodeFound) {
-                break;
-            }
-        }
-        return nodeFound;
+CG::Vk::GLTFModel::Node* FindNode(CG::Vk::GLTFModel::Node* parent, uint32_t index)
+{
+    CG::Vk::GLTFModel::Node* nodeFound = nullptr;
+    if (parent->index == index) {
+        return parent;
     }
-
-    CG::Vk::GLTFModel::Node* NodeFromIndex(uint32_t index, const std::vector<std::unique_ptr<CG::Vk::GLTFModel::Node>>& nodes) {
-        CG::Vk::GLTFModel::Node* nodeFound = nullptr;
-        for (auto& node : nodes) {
-            nodeFound = FindNode(node.get(), index);
-            if (nodeFound) {
-                break;
-            }
+    for (auto& child : parent->children) {
+        nodeFound = FindNode(child.get(), index);
+        if (nodeFound) {
+            break;
         }
-        return nodeFound;
     }
+    return nodeFound;
+}
+
+CG::Vk::GLTFModel::Node* NodeFromIndex(uint32_t index, const std::vector<std::unique_ptr<CG::Vk::GLTFModel::Node>>& nodes)
+{
+    CG::Vk::GLTFModel::Node* nodeFound = nullptr;
+    for (auto& node : nodes) {
+        nodeFound = FindNode(node.get(), index);
+        if (nodeFound) {
+            break;
+        }
+    }
+    return nodeFound;
+}
 }
 
 CG::Vk::GLTFModel::GLTFModel()
-{ }
+{
+}
 
 CG::Vk::GLTFModel::~GLTFModel()
 {
-	loaded = false;
+    loaded = false;
 
-    for (auto& texture : textures)
-    {
+    for (auto& texture : textures) {
         texture.texture.Destroy();
     }
 }
 
 void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*= 1.0f*/)
 {
-	tinygltf::Model glTFInput;
-	tinygltf::TinyGLTF gltfContext;
-	std::string error, warning;
+    tinygltf::Model glTFInput;
+    tinygltf::TinyGLTF gltfContext;
+    std::string error, warning;
 
-	bool fileLoaded = gltfContext.LoadASCIIFromFile(&glTFInput, &error, &warning, filename);
+    bool fileLoaded = gltfContext.LoadASCIIFromFile(&glTFInput, &error, &warning, filename);
 
-	std::vector<uint32_t> indexBuffer;
-	std::vector<Vertex> vertexBuffer;
+    std::vector<uint32_t> indexBuffer;
+    std::vector<Vertex> vertexBuffer;
 
-	if (fileLoaded) 
-	{
-		LoadTextureSamplers(glTFInput);
-		LoadTextures(glTFInput);
-		LoadMaterials(glTFInput);
+    if (fileLoaded) {
+        LoadTextureSamplers(glTFInput);
+        LoadTextures(glTFInput);
+        LoadMaterials(glTFInput);
 
         const tinygltf::Scene& scene = glTFInput.scenes[glTFInput.defaultScene > -1 ? glTFInput.defaultScene : 0];
         for (size_t i = 0; i < scene.nodes.size(); i++) {
@@ -108,11 +108,10 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*
         }
 
         CalculateSize();
-	}
-	else {
-		throw AssetLoadingException("Could not open the glTF file. Check, if it is correct");
-		return;
-	}
+    } else {
+        throw AssetLoadingException("Could not open the glTF file. Check, if it is correct");
+        return;
+    }
 
     extensions = glTFInput.extensionsUsed;
 }
@@ -124,7 +123,7 @@ std::vector<CG::Vk::GLTFModel::Material>& CG::Vk::GLTFModel::GetMaterials()
 
 const std::vector<CG::Vk::GLTFModel::Texture>& CG::Vk::GLTFModel::GetTextures() const
 {
-	return textures;
+    return textures;
 }
 
 const std::vector<std::unique_ptr<CG::Vk::GLTFModel::Node>>& CG::Vk::GLTFModel::GetNodes() const
@@ -139,29 +138,27 @@ const std::vector<CG::Vk::GLTFModel::Node*>& CG::Vk::GLTFModel::GetFlatNodes() c
 
 void CG::Vk::GLTFModel::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 {
-	// VkDeviceSize offsets[1] = { 0 };
-	// vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer.buffer, offsets);
-	// vkCmdBindIndexBuffer(commandBuffer, indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-	// Render all nodes at top-level
-	for (auto& node : nodes) 
-	{
-		DrawNode(commandBuffer, pipelineLayout, *node);
-	}
+    // VkDeviceSize offsets[1] = { 0 };
+    // vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer.buffer, offsets);
+    // vkCmdBindIndexBuffer(commandBuffer, indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
+    // Render all nodes at top-level
+    for (auto& node : nodes) {
+        DrawNode(commandBuffer, pipelineLayout, *node);
+    }
 }
 
-void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer , VkPipelineLayout , const Node& )
+void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer, VkPipelineLayout, const Node&)
 {
-
 }
 
 bool CG::Vk::GLTFModel::IsLoaded() const
 {
-	return loaded;
+    return loaded;
 }
 
 void CG::Vk::GLTFModel::SetLoaded(bool aLoaded)
 {
-	loaded = aLoaded;
+    loaded = aLoaded;
 }
 
 const glm::vec3& CG::Vk::GLTFModel::GetSize() const
@@ -172,10 +169,8 @@ const glm::vec3& CG::Vk::GLTFModel::GetSize() const
 const uint32_t CG::Vk::GLTFModel::GetPrimitivesCount()
 {
     uint32_t primCount = 0;
-    for (const auto& node : allNodes)
-    {
-        if (node->mesh)
-        {
+    for (const auto& node : allNodes) {
+        if (node->mesh) {
             primCount += static_cast<uint32_t>(node->mesh->primitives.size());
         }
     }
@@ -186,8 +181,7 @@ const uint32_t CG::Vk::GLTFModel::GetPrimitivesCount()
 // from GLTF2 specs
 VkSamplerAddressMode CG::Vk::GLTFModel::GetVkWrapMode(int32_t wrapMode)
 {
-    switch (wrapMode) 
-	{
+    switch (wrapMode) {
     case 10497:
         return VK_SAMPLER_ADDRESS_MODE_REPEAT;
     case 33071:
@@ -202,8 +196,7 @@ VkSamplerAddressMode CG::Vk::GLTFModel::GetVkWrapMode(int32_t wrapMode)
 // from GLTF2 specs
 VkFilter CG::Vk::GLTFModel::GetVkFilterMode(int32_t filterMode)
 {
-    switch (filterMode) 
-	{
+    switch (filterMode) {
     case 9728:
         return VK_FILTER_NEAREST;
     case 9729:
@@ -241,16 +234,13 @@ void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)
     for (const tinygltf::Texture& tex : input.textures) {
         const tinygltf::Image& image = input.images[tex.source];
         TextureSampler textureSampler;
-        if (tex.sampler == -1) 
-		{
+        if (tex.sampler == -1) {
             textureSampler.magFilter = VK_FILTER_LINEAR;
             textureSampler.minFilter = VK_FILTER_LINEAR;
             textureSampler.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
             textureSampler.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
             textureSampler.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-        }
-        else 
-		{
+        } else {
             textureSampler = textureSamplers[tex.sampler];
         }
         Texture texture;
@@ -413,7 +403,7 @@ void CG::Vk::GLTFModel::LoadAnimations(const tinygltf::Model& input)
                 }
             }
 
-            // Read sampler output T/R/S values 
+            // Read sampler output T/R/S values
             {
                 const tinygltf::Accessor& accessor = input.accessors[samp.output];
                 const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
@@ -589,7 +579,7 @@ void CG::Vk::GLTFModel::CreatePrimitiveBuffers(Primitive* newPrimitive, std::vec
     indexStaging.Destroy();
 }
 
-void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint32_t nodeIndex, 
+void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint32_t nodeIndex,
     const tinygltf::Model& input, float globalscale)
 {
     std::unique_ptr<Node> newNode = std::make_unique<Node>();
@@ -645,8 +635,8 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
             bool hasSkin = false;
             bool hasIndices = primitive.indices > -1;
 
-            glm::vec3 posMin{};
-            glm::vec3 posMax{};
+            glm::vec3 posMin {};
+            glm::vec3 posMax {};
 
             // Vertices
             {
@@ -734,8 +724,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
                 }
             }
             // Indices
-            if (hasIndices)
-            {
+            if (hasIndices) {
                 const tinygltf::Accessor& accessor = input.accessors[primitive.indices > -1 ? primitive.indices : 0];
                 const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
                 const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
@@ -772,7 +761,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
             }
 
             // loading last material as default one
-            std::unique_ptr<Primitive> newPrimitive = std::make_unique<Primitive>(indexStart, vertexStart, indexCount, vertexCount, 
+            std::unique_ptr<Primitive> newPrimitive = std::make_unique<Primitive>(indexStart, vertexStart, indexCount, vertexCount,
                 primitive.material > -1 ? materials[primitive.material] : materials.back());
             newPrimitive->bbox = AABBox(posMin, posMax);
 
@@ -795,8 +784,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
     if (parent) {
         parent->children.push_back(std::move(newNode));
         allNodes.push_back(parent->children.back().get());
-    }
-    else {
+    } else {
         nodes.push_back(std::move(newNode));
         allNodes.push_back(nodes.back().get());
     }
@@ -804,7 +792,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
 
 CG::Vk::GLTFModel::Mesh::Mesh(Device* vkDevice, const glm::mat4& meshMat)
 {
-	uniformBlock.matrix = meshMat;
+    uniformBlock.matrix = meshMat;
 
     VK_CHECK_RESULT(vkDevice->CreateBuffer(
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -819,12 +807,12 @@ CG::Vk::GLTFModel::Mesh::Mesh(Device* vkDevice, const glm::mat4& meshMat)
 
 void CG::Vk::GLTFModel::Mesh::UpdateUniformBuffers()
 {
-	uniformBuffer.buffer.CopyTo(&uniformBlock, sizeof(uniformBlock));
+    uniformBuffer.buffer.CopyTo(&uniformBlock, sizeof(uniformBlock));
 }
 
 glm::mat4 CG::Vk::GLTFModel::Node::GetLocalMatrix()
 {
-	return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+    return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
 }
 
 glm::mat4 CG::Vk::GLTFModel::Node::GetWorldMatrix()
@@ -854,10 +842,9 @@ void CG::Vk::GLTFModel::Node::UpdateRecursive()
                 mesh->uniformBlock.jointMatrix[i] = jointMat;
             }
             mesh->uniformBlock.jointcount = static_cast<float>(numJoints);
-			mesh->UpdateUniformBuffers();
-        }
-        else {
-			mesh->uniformBuffer.buffer.CopyTo(&worldMat, sizeof(glm::mat4));
+            mesh->UpdateUniformBuffers();
+        } else {
+            mesh->uniformBuffer.buffer.CopyTo(&worldMat, sizeof(glm::mat4));
         }
     }
 
@@ -868,7 +855,7 @@ void CG::Vk::GLTFModel::Node::UpdateRecursive()
 
 void CG::Vk::GLTFModel::Texture::FromGLTFImage(const tinygltf::Image& glTFImage, TextureSampler textureSampler, Device* device, VkQueue copyQueue)
 {
-	VkDeviceSize bufferSize = 0;
+    VkDeviceSize bufferSize = 0;
 
     // We convert RGB-only images to RGBA, as most devices don't support RGB-formats in Vulkan
     if (glTFImage.component == 3) {
@@ -890,8 +877,7 @@ void CG::Vk::GLTFModel::Texture::FromGLTFImage(const tinygltf::Image& glTFImage,
         texture.FromBuffer(buffer, bufferSize, VK_FORMAT_R8G8B8A8_UNORM, glTFImage.width, glTFImage.height,
             device, copyQueue, VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             VK_IMAGE_TILING_OPTIMAL, textureSampler);
-    }
-    else {
+    } else {
         const unsigned char* buffer = &glTFImage.image[0];
         bufferSize = glTFImage.image.size();
 

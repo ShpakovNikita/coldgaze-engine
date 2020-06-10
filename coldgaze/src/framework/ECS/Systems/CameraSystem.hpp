@@ -4,29 +4,32 @@
 #include "entt/entity/fwd.hpp"
 
 struct CameraComponent;
-namespace CG { namespace Vk { class Device; } }
+namespace CG {
+namespace Vk {
+    class Device;
+}
+}
 
 class CameraSystem
-	: public ICGSystem
-{
+    : public ICGSystem {
 public:
-	void Update(float deltaTime, entt::registry& registry) override;
-	void InputUpdate(float deltaTime, entt::registry& registry, const SDL_Event& event) override;
+    void Update(float deltaTime, entt::registry& registry) override;
+    void InputUpdate(float deltaTime, entt::registry& registry, const SDL_Event& event) override;
 
-	void SetDevice(const CG::Vk::Device* vkDevice);
+    void SetDevice(const CG::Vk::Device* vkDevice);
 
-	virtual ~CameraSystem() = default;
+    virtual ~CameraSystem() = default;
 
 private:
-	static void UpdateCameraFirstPerson(CameraComponent& cameraComponent, float deltaTime);
-	static void UpdateCameraLookAt(CameraComponent& cameraComponent, float deltaTime);
+    static void UpdateCameraFirstPerson(CameraComponent& cameraComponent, float deltaTime);
+    static void UpdateCameraLookAt(CameraComponent& cameraComponent, float deltaTime);
 
-	static void UpdateCameraView(CameraComponent& cameraComponent);
-	static void UpdateMousePos(CameraComponent& cameraComponent, int32_t x, int32_t y);
+    static void UpdateCameraView(CameraComponent& cameraComponent);
+    static void UpdateMousePos(CameraComponent& cameraComponent, int32_t x, int32_t y);
 
-	void UpdateUniformBuffers(CameraComponent& cameraComponent) const;
+    void UpdateUniformBuffers(CameraComponent& cameraComponent) const;
 
-	entt::entity activeCameraEntity = {};
+    entt::entity activeCameraEntity = {};
 
-	const CG::Vk::Device* vkDevice = nullptr;
+    const CG::Vk::Device* vkDevice = nullptr;
 };

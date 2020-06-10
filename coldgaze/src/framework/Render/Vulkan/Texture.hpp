@@ -2,32 +2,29 @@
 
 #include "vulkan\vulkan_core.h"
 
-namespace CG
-{
-    namespace Vk
-    {
-        class Device;
+namespace CG {
+namespace Vk {
+    class Device;
 
-        class Texture
-        {
-        public:
-            VkDescriptorImageInfo descriptor = {};
+    class Texture {
+    public:
+        VkDescriptorImageInfo descriptor = {};
 
-            virtual ~Texture();
+        virtual ~Texture();
 
-            const Device* vkDevice = nullptr;
-            uint32_t height = 0, width = 0;
-            uint16_t mipLevels = 0;
-            VkImage image = {};
-            VkDeviceMemory deviceMemory = {};
-            VkImageLayout imageLayout = {};
-            VkSampler sampler = {};
-            VkImageView view = {};
+        const Device* vkDevice = nullptr;
+        uint32_t height = 0, width = 0;
+        uint16_t mipLevels = 0;
+        VkImage image = {};
+        VkDeviceMemory deviceMemory = {};
+        VkImageLayout imageLayout = {};
+        VkSampler sampler = {};
+        VkImageView view = {};
 
-            void Destroy();
+        void Destroy();
 
-        protected:
-            void UpdateDescriptor();
-        };
-    }
+    protected:
+        void UpdateDescriptor();
+    };
+}
 }
