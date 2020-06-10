@@ -109,7 +109,6 @@ bool CG::Engine::Init()
 
 void CG::Engine::Prepare()
 {
-    // TODO: read about debug markers
     InitSwapChain();
     CreateCommandPool();
     SetupSwapChain();
@@ -199,6 +198,15 @@ void CG::Engine::Cleanup()
 		vkDestroyShaderModule(vkDevice->logicalDevice, shaderModule, nullptr);
 	}
 	*/
+
+    waitFences.resize(drawCmdBuffers.size());
+    for (auto& fence : waitFences) {
+        vkDestroyFence(vkDevice->logicalDevice, fence, nullptr);
+    }
+
+    vkDestroySemaphore(vkDevice->logicalDevice, semaphores.presentComplete, nullptr);
+    vkDestroySemaphore(vkDevice->logicalDevice, semaphores.renderComplete, nullptr);
+
     delete vkSwapChain;
     delete vkDevice;
 
@@ -547,8 +555,6 @@ void CG::Engine::CreatePipelineCache()
 
 void CG::Engine::SetupFrameBuffer()
 {
-    // SetupMultisampleTarget();
-
     std::array<VkImageView, 2> attachments;
 
     attachments[1] = depthStencil.view;
@@ -666,100 +672,6 @@ void CG::Engine::DestroyCommandBuffers()
 {
     VkDevice device = vkDevice->logicalDevice;
     vkFreeCommandBuffers(device, vkCmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
-}
-
-void CG::Engine::SetupMultisampleTarget()
-{
-    assert((vkDevice->properties.limits.framebufferColorSampleCounts >= static_cast<VkSampleCountFlags>(sampleCount))
-        && (vkDevice->properties.limits.framebufferDepthSampleCounts >= static_cast<VkSampleCountFlags>(sampleCount)));
-
-    // Color target
-    VkImageCreateInfo info = Vk::Initializers::ImageCreateInfo();
-    info.imageType = VK_IMAGE_TYPE_2D;
-    info.format = vkSwapChain->colorFormat;
-    info.extent.width = engineConfig.width;
-    info.extent.height = engineConfig.height;
-    info.extent.depth = 1;
-    info.mipLevels = 1;
-    info.arrayLayers = 1;
-    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.samples = sampleCount;
-    info.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &info, nullptr, &multisampleTarget.color.image));
-
-    VkMemoryRequirements memReqs;
-    vkGetImageMemoryRequirements(vkDevice->logicalDevice, multisampleTarget.color.image, &memReqs);
-    VkMemoryAllocateInfo memAlloc = Vk::Initializers::MemoryAllocateInfo();
-    memAlloc.allocationSize = memReqs.size;
-    VkBool32 lazyMemTypePresent;
-    memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT, &lazyMemTypePresent);
-    if (!lazyMemTypePresent) {
-        // If lazy allocation disabled, use good old device allocation
-        memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    }
-    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAlloc, nullptr, &multisampleTarget.color.memory));
-    vkBindImageMemory(vkDevice->logicalDevice, multisampleTarget.color.image, multisampleTarget.color.memory, 0);
-
-    // Create image view for the MSAA target
-    VkImageViewCreateInfo viewInfo = Vk::Initializers::ImageViewCreateInfo();
-    viewInfo.image = multisampleTarget.color.image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = vkSwapChain->colorFormat;
-    viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    viewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.layerCount = 1;
-
-    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &viewInfo, nullptr, &multisampleTarget.color.view));
-
-    // Depth target
-    info.imageType = VK_IMAGE_TYPE_2D;
-    info.format = vkDevice->depthFormat;
-    info.extent.width = engineConfig.width;
-    info.extent.height = engineConfig.height;
-    info.extent.depth = 1;
-    info.mipLevels = 1;
-    info.arrayLayers = 1;
-    info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.samples = sampleCount;
-    // Image will only be used as a transient target
-    info.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &info, nullptr, &multisampleTarget.depth.image));
-
-    vkGetImageMemoryRequirements(vkDevice->logicalDevice, multisampleTarget.depth.image, &memReqs);
-    memAlloc = Vk::Initializers::MemoryAllocateInfo();
-    memAlloc.allocationSize = memReqs.size;
-
-    memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT, &lazyMemTypePresent);
-    if (!lazyMemTypePresent) {
-        memAlloc.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    }
-
-    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memAlloc, nullptr, &multisampleTarget.depth.memory));
-    vkBindImageMemory(vkDevice->logicalDevice, multisampleTarget.depth.image, multisampleTarget.depth.memory, 0);
-
-    // Create image view for the MSAA target
-    viewInfo.image = multisampleTarget.depth.image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = vkDevice->depthFormat;
-    viewInfo.components.r = VK_COMPONENT_SWIZZLE_R;
-    viewInfo.components.g = VK_COMPONENT_SWIZZLE_G;
-    viewInfo.components.b = VK_COMPONENT_SWIZZLE_B;
-    viewInfo.components.a = VK_COMPONENT_SWIZZLE_A;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.layerCount = 1;
-
-    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &viewInfo, nullptr, &multisampleTarget.depth.view));
 }
 
 bool CG::Engine::CheckValidationLayersSupport()

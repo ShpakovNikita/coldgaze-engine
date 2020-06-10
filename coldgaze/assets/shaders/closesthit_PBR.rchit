@@ -1,15 +1,10 @@
 #version 460
-#extension GL_EXT_control_flow_attributes : require
 #extension GL_NV_ray_tracing : require
 #extension GL_EXT_nonuniform_qualifier : enable
 
 struct RayPayload
 {
 	vec3 color;
-	vec3 scatterDirection;
-    float rayDistance;
-    bool isScattered;
-	uint randomSeed;
 };
 
 struct VertexData
@@ -39,11 +34,20 @@ struct Material {
 };
 
 struct PBRParams {
+    float NdotL;                  // cos angle between normal and light direction
+	float NdotV;                  // cos angle between normal and view direction
+	float NdotH;                  // cos angle between normal and half vector
+	float LdotH;                  // cos angle between light direction and half vector
+	float VdotH;                  // cos angle between view direction and half vector
     float occlusion;              // pre calculated occlusion value on the surface
 	float roughness;              // roughness value at the surface
 	float metallic;               // metallic value at the surface
+	float alphaRoughness;         // roughness * roughness
+	vec3 diffuseColor;            // color contribution from diffuse lighting
+	vec3 specularColor;           // color contribution from specular lighting
 	vec4 albedo;                  // base albedo color value
-	vec3 worldNormal;                // point on surface world position
+	vec3 worldPos;                // point on surface world position
+    vec3 N;                       // World normal
 };
 
 layout(binding = 2, set = 0) uniform UBOScene
@@ -82,127 +86,65 @@ const float c_MinRoughness = 0.04;
 const float DIELECTRIC_REFLECTION_APPROXIMATION = 0.04;
 const float PI = 3.14159265359;
 
-const float GLASS_REFRACTION_INDEX = 1.517;
-
-
-uint InitRandomSeed(uint val0, uint val1)
+// Approximation of microfacets towards half-vector using Normal Distribution
+float NDF_GGXTR(PBRParams pbrParams)
 {
-	uint v0 = val0, v1 = val1, s0 = 0;
-
-	[[unroll]] 
-	for (uint n = 0; n < 16; n++)
-	{
-		s0 += 0x9e3779b9;
-		v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
-		v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
-	}
-
-	return v0;
-}
-
-uint RandomInt(inout uint seed)
-{
-	// LCG values from Numerical Recipes
-    return (seed = 1664525 * seed + 1013904223);
-}
-
-float RandomFloat(inout uint seed)
-{
-	// Float version using bitmask from Numerical Recipes
-	const uint one = 0x3f800000;
-	const uint msk = 0x007fffff;
-	return uintBitsToFloat(one | (msk & (RandomInt(seed) >> 9))) - 1;
-}
-
-vec2 RandomInUnitDisk(inout uint seed)
-{
-	for (;;)
-	{
-		const vec2 p = 2 * vec2(RandomFloat(seed), RandomFloat(seed)) - 1;
-		if (dot(p, p) < 1)
-		{
-			return p;
-		}
-	}
-}
-
-vec3 RandomInUnitSphere(inout uint seed)
-{
-	for (;;)
-	{
-		const vec3 p = 2 * vec3(RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)) - 1;
-		if (dot(p, p) < 1)
-		{
-			return p;
-		}
-	}
-}
-
-
-// https://en.wikipedia.org/wiki/Schlick%27s_approximation
-float FresnelSchlick(float cosTheta, float refractionIndex)
-{
-	float r0 = (1.0 - refractionIndex) / (1.0 + refractionIndex);
-	r0 *= r0;
-	return r0 + (1.0 - r0) * pow(1.0 - cosTheta, 5.0);
-}
-
-// Lambertian
-RayPayload ScatterLambertian(Material material, vec3 direction, PBRParams pbrParams, VertexData vertexData, float distance, inout uint seed)
-{
-	const bool isScattered = dot(direction, pbrParams.worldNormal) < 0.0;
-    
-    const vec3 color = pbrParams.albedo.rgb; 
-	const vec3 scatter = pbrParams.worldNormal + RandomInUnitSphere(seed);
-
-	return RayPayload(color, scatter, distance, isScattered, seed);
-}
-
-// Metallic
-RayPayload ScatterMetallic(Material material, vec3 direction, PBRParams pbrParams, VertexData vertexData, float distance, inout uint seed)
-{
-	const vec3 reflected = reflect(direction, pbrParams.worldNormal);
-    
-    // TODO: is always true?
-	const bool isScattered = dot(reflected, pbrParams.worldNormal) > 0;
-
-	const vec3 color = isScattered ? pbrParams.albedo.rgb : vec3(1, 1, 1);
-	const vec3 scatter = reflected + pbrParams.roughness * RandomInUnitSphere(seed);
-
-	return RayPayload(color, scatter, distance, isScattered, seed);
-}
-
-// Dielectric
-RayPayload ScatterDieletric(Material material, vec3 direction, PBRParams pbrParams, VertexData vertexData, float distance, inout uint seed)
-{
-	const float dot = dot(direction, pbrParams.worldNormal);
-	const vec3 outwardNormal = dot > 0 ? -pbrParams.worldNormal : pbrParams.worldNormal;
-	const float niOverNt = dot > 0 ? GLASS_REFRACTION_INDEX: 1 / GLASS_REFRACTION_INDEX;
-	const float cosTheta = dot > 0 ? GLASS_REFRACTION_INDEX * dot : -dot;
-
-	const vec3 refracted = refract(direction, outwardNormal, niOverNt);
-	const float reflectProb = refracted != vec3(0) ? FresnelSchlick(cosTheta, GLASS_REFRACTION_INDEX) : 1;
+    float a      = pbrParams.alphaRoughness;
+    float a2     = a * a;
+    float NdotH2 = pbrParams.NdotH * pbrParams.NdotH;
 	
-	return RandomFloat(seed) < reflectProb
-		? RayPayload(pbrParams.albedo.rgb, reflect(direction, pbrParams.worldNormal), distance, true, seed)
-		: RayPayload(pbrParams.albedo.rgb, refracted, distance, true, seed);
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+	
+    return num / denom;
 }
 
-// Diffuse Light
-RayPayload ScatterDiffuseLight(Material material, float distance, inout uint seed)
+// Geometry function
+float G_SchlickGGX(float cosTheta, float roughness)
 {
-	const vec3 scatter = vec3(1, 0, 0);
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
 
-	return RayPayload(material.baseColorFactor.rgb, scatter, distance, false, seed);
+    float num   = cosTheta;
+    float denom = cosTheta * (1.0 - k) + k;
+	
+    return num / denom;
 }
 
-RayPayload Scatter(Material material, vec3 direction, VertexData vertexData, float distance, inout uint seed, PBRParams pbrParams)
+// This method covers geometry obstruction and shadowing cases
+float G_Smith(PBRParams pbrParams)
 {
-	const vec3 normDirection = normalize(direction);
-    return ScatterMetallic(material, normDirection, pbrParams, vertexData, distance, seed);
-    return ScatterDiffuseLight(material, distance, seed);
-    return ScatterDieletric(material, normDirection, pbrParams, vertexData, distance, seed);
-	return ScatterLambertian(material, normDirection, pbrParams, vertexData, distance, seed);
+    float ggx1 = G_SchlickGGX(pbrParams.NdotV, pbrParams.roughness);
+    float ggx2 = G_SchlickGGX(pbrParams.NdotL, pbrParams.roughness);
+	
+    return ggx1 * ggx2;
+}
+
+// Fresnel function
+vec3 F_Schlick(PBRParams pbrParams)
+{
+    return pbrParams.specularColor + (1.0 - pbrParams.specularColor) * pow(clamp(1.0 - pbrParams.VdotH, 0.0, 1.0), 5.0);
+}
+
+// Result reflection
+vec3 BRDF_CookTorrance(vec3 lightColor, VertexData vertexData, PBRParams pbrParams)
+{
+    // Cook-Torrance BRDF
+    float NDF = NDF_GGXTR(pbrParams);        
+    float G = G_Smith(pbrParams);      
+    vec3 F = F_Schlick(pbrParams);
+    
+    vec3 num = NDF * G * F;
+    float denom = 4.0 * pbrParams.NdotV * pbrParams.NdotL;
+    vec3 specularContrib = num / max(denom, 0.001);  
+    
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+      
+    kD *= 1.0 - pbrParams.metallic;	 
+    
+    return (kD * pbrParams.albedo.rgb / PI + specularContrib) * lightColor * pbrParams.NdotL;
 }
 
 vec2 dFdy(vec2 p)
@@ -291,12 +233,15 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
         albedo = texture(baseColorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], 
             material.baseColorTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw);
     } else {
-        albedo = material.baseColorFactor;
+        albedo = vec4(1.0); // material.baseColorFactor;
     }
 
     vec3 worldPos = gl_WorldRayOriginNV + gl_HitTNV * gl_WorldRayDirectionNV;
     
     vec3 N = perturbNormal(vertexData, material, worldPos);
+    vec3 V = normalize(gl_WorldRayOriginNV - worldPos);
+    vec3 L = normalize(uboScene.globalLightDir.xyz);	
+    vec3 H = normalize(V + L);
     
     float occlusion = 1.0f;
     float roughness = material.roughnessFactor;
@@ -315,11 +260,32 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
         occlusion = texture(ambientOcclusionTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], (material.occlusionTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw)).r;
     }
     
+    vec3 F0 = vec3(0.04); 
+    vec3 specularColor = mix(F0, albedo.rgb, metallic);
+    
+    vec3 diffuseColor = albedo.rgb * (vec3(1.0) - F0);
+    diffuseColor *= 1.0 - metallic;
+    
+    float NdotL = clamp(dot(N, L), 0.001, 1.0);
+    float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
+    float NdotH = clamp(dot(N, H), 0.0, 1.0);
+    float LdotH = clamp(dot(L, H), 0.0, 1.0);
+    float VdotH = clamp(dot(V, H), 0.0, 1.0);
+    
     PBRParams pbrParams = PBRParams(
+        NdotL,
+        NdotV,
+        NdotH,
+        LdotH,
+        VdotH,
         occlusion,
         roughness,
         metallic,
+        roughness * roughness,
+        diffuseColor,
+        specularColor,
         albedo,
+        worldPos,
         N
     );
     
@@ -337,6 +303,19 @@ void main()
     const VertexData vertexData = BaryLerp(v0, v1, v2, barycentrics);
     const Material material = materialBuffers[nonuniformEXT(gl_InstanceCustomIndexNV)].material;
     
-    PBRParams pbrParams = GetPBRParams(vertexData, material);
-    rayPayload = Scatter(material, gl_WorldRayDirectionNV, vertexData, gl_HitTNV, rayPayload.randomSeed, pbrParams);
+    if (material.workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
+    {
+        PBRParams pbrParams = GetPBRParams(vertexData, material);
+        
+        vec3 radiance = vec3(0.0);
+        radiance += BRDF_CookTorrance(uboScene.globalLightColor.rgb, vertexData, pbrParams);
+  
+        vec3 ambient = vec3(0.04) * pbrParams.albedo.rgb * pbrParams.occlusion; 
+        
+        rayPayload.color = ambient + radiance;
+    }
+    else
+    {
+        rayPayload.color = vec3(1.0, 0.0, 0.0);
+    }
 }

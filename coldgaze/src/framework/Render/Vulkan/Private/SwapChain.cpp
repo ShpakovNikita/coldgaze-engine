@@ -191,7 +191,6 @@ void CG::Vk::SwapChain::Create(uint32_t* width, uint32_t* height, bool vsync)
     swapchainCI.clipped = VK_TRUE;
     swapchainCI.compositeAlpha = compositeAlpha;
 
-    // TODO: enable all supported usage flags
     // Enable transfer source on swap chain images if supported
     if (surfCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
         swapchainCI.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -225,7 +224,6 @@ void CG::Vk::SwapChain::Create(uint32_t* width, uint32_t* height, bool vsync)
         colorAttachmentView.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         colorAttachmentView.pNext = NULL;
         colorAttachmentView.format = colorFormat;
-        // TODO: play with remapping
         colorAttachmentView.components = {
             VK_COMPONENT_SWIZZLE_R,
             VK_COMPONENT_SWIZZLE_G,

@@ -100,6 +100,7 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
             component.input.right = true;
             break;
         }
+        component.ResetSamples();
     } break;
 
     case SDL_KEYUP: {
@@ -117,6 +118,7 @@ void CameraSystem::InputUpdate(float deltaTime, entt::registry& registry, const 
             component.input.right = false;
             break;
         }
+        component.ResetSamples();
     } break;
     }
 }
@@ -232,4 +234,8 @@ void CameraSystem::UpdateMousePos(CameraComponent& cameraComponent, int32_t x, i
 
     cameraComponent.input.newMousePos.x = static_cast<float>(x);
     cameraComponent.input.newMousePos.y = static_cast<float>(y);
+
+    if (cameraComponent.input.IsRotating()) {
+        cameraComponent.ResetSamples();
+    }
 }

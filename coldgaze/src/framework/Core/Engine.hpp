@@ -1,4 +1,7 @@
 #pragma once
+
+#define _MATH_DEFINES_DEFINED
+
 #include "Render/Vulkan/Buffer.hpp"
 #include "SDL2/SDL_events.h"
 #include "vulkan/vulkan.hpp"
@@ -18,12 +21,6 @@ class ICGSystem;
 union SDL_Event;
 
 namespace CG {
-// TODO: get rid of vertex here
-struct Vertex {
-    float position[3];
-    float color[3];
-};
-
 namespace Vk {
     class SwapChain;
     class Device;
@@ -122,19 +119,6 @@ protected:
     std::vector<const char*> enabledDeviceExtensions;
 
 private:
-    struct {
-        struct {
-            VkImage image;
-            VkImageView view;
-            VkDeviceMemory memory;
-        } color;
-        struct {
-            VkImage image;
-            VkImageView view;
-            VkDeviceMemory memory;
-        } depth;
-    } multisampleTarget;
-
     bool Init();
     void MainLoop(float deltaTime);
 
@@ -166,7 +150,6 @@ private:
     // Cleanup steps
     void CleanupSDL();
     void DestroyCommandBuffers();
-    void SetupMultisampleTarget();
 
     bool CheckValidationLayersSupport();
 
@@ -179,7 +162,6 @@ private:
 
     void WindowResize();
 
-    // TODO: move to some renderer interface
     VkShaderModule LoadSPIRVShader(const std::string& filename) const;
 
     bool isRunning = false;

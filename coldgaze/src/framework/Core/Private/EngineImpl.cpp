@@ -27,6 +27,7 @@
 #include "SDL2\SDL_messagebox.h"
 #include "entt\entity\registry.hpp"
 #include "imgui\imgui.h"
+#include <random>
 
 using namespace CG;
 
@@ -84,6 +85,7 @@ void CG::EngineImpl::Prepare()
     InitRayTracing();
     LoadNVRayTracingProcs();
     CreateNVRayTracingStoreImage();
+    CreateNVRayTracingAccumulationImage();
 
     SetupSystems();
 
@@ -98,8 +100,8 @@ void CG::EngineImpl::Prepare()
         "D:/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/"
         "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
 
-    // CreateRTXPipeline();
-    CreateShaderBindingTable();
+    CreateShaderBindingTable(shaderBindingTables.RTX, pipelines.RTX);
+    CreateShaderBindingTable(shaderBindingTables.RTX_PBR, pipelines.RTX_PBR);
 
     BuildCommandBuffers();
 
@@ -111,6 +113,7 @@ void CG::EngineImpl::Cleanup()
     DestroyRTXPipeline();
     DestroyNVRayTracingGeometry();
     DestroyNVRayTracingStoreImage();
+    DestroyNVRayTracingAccumulationImage();
 
     emptyTexture.Destroy();
     cubemapTexture.Destroy();
@@ -173,8 +176,10 @@ void CG::EngineImpl::CaptureEvent(const SDL_Event& event)
 
 void CG::EngineImpl::OnWindowResize()
 {
+    DestroyNVRayTracingAccumulationImage();
     DestroyNVRayTracingStoreImage();
     CreateNVRayTracingStoreImage();
+    CreateNVRayTracingAccumulationImage();
 }
 
 void CG::EngineImpl::FlushCommandBuffer(VkCommandBuffer commandBuffer)
@@ -277,7 +282,6 @@ void CG::EngineImpl::PrepareUniformBuffers()
     auto cameraEntity = registry.create();
     CameraComponent& component = registry.assign<CameraComponent>(cameraEntity);
 
-    component.vkDevice = vkDevice;
     component.viewport.height = engineConfig.height;
     component.viewport.width = engineConfig.width;
 
@@ -292,6 +296,14 @@ void CG::EngineImpl::PrepareUniformBuffers()
 
     // Map persistent
     VK_CHECK_RESULT(sceneUbo.Map());
+
+    VK_CHECK_RESULT(
+        vkDevice->CreateBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            &cameraUbo, sizeof(cameraUboData)));
+
+    // Map persistent
+    VK_CHECK_RESULT(cameraUbo.Map());
 }
 
 void CG::EngineImpl::UpdateUniformBuffers()
@@ -303,7 +315,7 @@ void CG::EngineImpl::UpdateUniformBuffers()
         sin(glm::radians(rotation.y)),
         cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)), 0.0f);
 
-    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 20.0f; // glm::vec4({ 23.0f, 11.0f, 15.0f, 1.0f }) * 0.1f;
+    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 5.0f;
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
 
@@ -319,6 +331,18 @@ void CG::EngineImpl::UpdateUniformBuffers()
 
     sceneUboData.cameraPos = glm::vec4(cameraComponent->position, 1.0f);
     sceneUbo.CopyTo(&sceneUboData, sizeof(sceneUboData));
+
+    std::random_device dev;
+    std::mt19937 rng(dev());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(0, std::numeric_limits<int>::max());
+
+    cameraUboData.randomSeed = dist(rng);
+    cameraUboData.accumulationIndex = cameraComponent->accumulationIndex;
+    cameraUbo.CopyTo(&cameraUboData, sizeof(cameraUboData));
+
+    if (!cameraUboData.pauseRendering && !cameraComponent->input.IsMoving()) {
+        cameraComponent->accumulationIndex = std::min(cameraComponent->accumulationIndex + 1, std::numeric_limits<int>::max());
+    }
 }
 
 void CG::EngineImpl::SetupSystems()
@@ -344,14 +368,32 @@ void CG::EngineImpl::DrawUI()
         ImGui::ColorEdit4("Background", &uiData.bgColor.x,
             ImGuiColorEditFlags_NoInputs);
 
-        ImGui::Checkbox("Wireframe mode", &uiData.drawWire);
+        ImGui::Checkbox("Enable preview quality", &uiData.enablePreviewQuality);
 
         // Plot some values
         const float dummyData[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
         ImGui::PlotLines("Frame Times", dummyData, IM_ARRAYSIZE(dummyData));
 
-        ImGui::SliderFloat("Camera FOV:", &uiData.fov, 10.0f, 135.0f);
-        cameraComponent->fov = uiData.fov;
+        const float oldFov = cameraComponent->fov;
+        ImGui::SliderFloat("Camera FOV:", &cameraComponent->fov, 10.0f, 135.0f);
+
+        CameraUboData oldCameraUbo = cameraUboData;
+
+        ImGui::SliderInt("Bounces count:", &cameraUboData.bouncesCount, 1, 64);
+        ImGui::SliderInt("Number of samples:", &cameraUboData.numberOfSamples, 1, 64);
+        ImGui::SliderFloat("Aperture:", &cameraUboData.aperture, 0.0f, 1.0f);
+        ImGui::SliderFloat("Focus distance:", &cameraUboData.focusDistance, 0.0f, 64.0f);
+
+        if (cameraUboData.pauseRendering) {
+            cameraUboData.pauseRendering = !ImGui::Button("Resume");
+        } else {
+            cameraUboData.pauseRendering = ImGui::Button("Pause");
+        }
+
+        if (std::tie(oldCameraUbo.aperture, oldCameraUbo.bouncesCount, oldCameraUbo.focusDistance, oldCameraUbo.numberOfSamples) != std::tie(cameraUboData.aperture, cameraUboData.bouncesCount, cameraUboData.focusDistance, cameraUboData.numberOfSamples)
+            || oldFov != cameraComponent->fov) {
+            cameraComponent->ResetSamples();
+        }
 
         ImGui::End();
     }
@@ -848,7 +890,63 @@ void CG::EngineImpl::DestroyNVRayTracingStoreImage()
     vkFreeMemory(vkDevice->logicalDevice, storageImage.memory, nullptr);
 }
 
-void CG::EngineImpl::CreateShaderBindingTable()
+void CG::EngineImpl::CreateNVRayTracingAccumulationImage()
+{
+    VkImageCreateInfo image = Vk::Initializers::ImageCreateInfo();
+    image.imageType = VK_IMAGE_TYPE_2D;
+    image.format = vkSwapChain->colorFormat;
+    image.extent.width = engineConfig.width;
+    image.extent.height = engineConfig.height;
+    image.extent.depth = 1;
+    image.mipLevels = 1;
+    image.arrayLayers = 1;
+    image.samples = VK_SAMPLE_COUNT_1_BIT;
+    image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+    image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VK_CHECK_RESULT(vkCreateImage(vkDevice->logicalDevice, &image, nullptr,
+        &accumulationImage.image));
+
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(vkDevice->logicalDevice, accumulationImage.image,
+        &memReqs);
+    VkMemoryAllocateInfo memoryAllocateInfo = Vk::Initializers::MemoryAllocateInfo();
+    memoryAllocateInfo.allocationSize = memReqs.size;
+    memoryAllocateInfo.memoryTypeIndex = vkDevice->GetMemoryTypeIndex(
+        memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    VK_CHECK_RESULT(vkAllocateMemory(vkDevice->logicalDevice, &memoryAllocateInfo,
+        nullptr, &accumulationImage.memory));
+    VK_CHECK_RESULT(vkBindImageMemory(vkDevice->logicalDevice, accumulationImage.image,
+        accumulationImage.memory, 0));
+
+    VkImageViewCreateInfo colorImageView = Vk::Initializers::ImageViewCreateInfo();
+    colorImageView.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    colorImageView.format = vkSwapChain->colorFormat;
+    colorImageView.subresourceRange = {};
+    colorImageView.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    colorImageView.subresourceRange.baseMipLevel = 0;
+    colorImageView.subresourceRange.levelCount = 1;
+    colorImageView.subresourceRange.baseArrayLayer = 0;
+    colorImageView.subresourceRange.layerCount = 1;
+    colorImageView.image = accumulationImage.image;
+    VK_CHECK_RESULT(vkCreateImageView(vkDevice->logicalDevice, &colorImageView,
+        nullptr, &accumulationImage.view));
+
+    VkCommandBuffer cmdBuffer = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+    Vk::Utils::SetImageLayout(cmdBuffer, accumulationImage.image,
+        VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+        { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 });
+    vkDevice->FlushCommandBuffer(cmdBuffer, queue);
+}
+
+void CG::EngineImpl::DestroyNVRayTracingAccumulationImage()
+{
+    vkDestroyImageView(vkDevice->logicalDevice, accumulationImage.view, nullptr);
+    vkDestroyImage(vkDevice->logicalDevice, accumulationImage.image, nullptr);
+    vkFreeMemory(vkDevice->logicalDevice, accumulationImage.memory, nullptr);
+}
+
+void CG::EngineImpl::CreateShaderBindingTable(Vk::Buffer& shaderBindingTable, VkPipeline pipeline)
 {
     const uint32_t sbtSize = rayTracingProperties.shaderGroupHandleSize * 3;
     VK_CHECK_RESULT(vkDevice->CreateBuffer(VK_BUFFER_USAGE_RAY_TRACING_BIT_NV,
@@ -859,7 +957,7 @@ void CG::EngineImpl::CreateShaderBindingTable()
     auto shaderHandleStorage = new uint8_t[sbtSize];
     // Get shader identifiers
     VK_CHECK_RESULT(vkGetRayTracingShaderGroupHandlesNV(
-        vkDevice->logicalDevice, pipelines.RTX, 0, 3, sbtSize,
+        vkDevice->logicalDevice, pipeline, 0, 3, sbtSize,
         shaderHandleStorage));
     auto* data = static_cast<uint8_t*>(shaderBindingTable.mapped);
 
@@ -899,12 +997,12 @@ void CG::EngineImpl::CreateRTXPipeline()
     const uint32_t shaderIndexMiss = 1;
     const uint32_t shaderIndexClosestHit = 2;
 
-    std::array<VkPipelineShaderStageCreateInfo, 3> shaderStages;
-    shaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygen.rgen.spv",
+    std::array<VkPipelineShaderStageCreateInfo, 3> rtxShaderStages;
+    rtxShaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygen.rgen.spv",
         VK_SHADER_STAGE_RAYGEN_BIT_NV);
-    shaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/miss.rmiss.spv",
+    rtxShaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/miss.rmiss.spv",
         VK_SHADER_STAGE_MISS_BIT_NV);
-    shaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthit.rchit.spv",
+    rtxShaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthit.rchit.spv",
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV);
 
     std::array<VkRayTracingShaderGroupCreateInfoNV, 3> groups {};
@@ -928,8 +1026,8 @@ void CG::EngineImpl::CreateRTXPipeline()
 
     VkRayTracingPipelineCreateInfoNV rayPipelineInfo {};
     rayPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_NV;
-    rayPipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-    rayPipelineInfo.pStages = shaderStages.data();
+    rayPipelineInfo.stageCount = static_cast<uint32_t>(rtxShaderStages.size());
+    rayPipelineInfo.pStages = rtxShaderStages.data();
     rayPipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
     rayPipelineInfo.pGroups = groups.data();
     rayPipelineInfo.maxRecursionDepth = 1;
@@ -938,10 +1036,26 @@ void CG::EngineImpl::CreateRTXPipeline()
     VK_CHECK_RESULT(
         vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1,
             &rayPipelineInfo, nullptr, &pipelines.RTX));
+
+    std::array<VkPipelineShaderStageCreateInfo, 3> pbrShaderStages;
+    pbrShaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygen_PBR.rgen.spv",
+        VK_SHADER_STAGE_RAYGEN_BIT_NV);
+    pbrShaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/miss_PBR.rmiss.spv",
+        VK_SHADER_STAGE_MISS_BIT_NV);
+    pbrShaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthit_PBR.rchit.spv",
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV);
+
+    rayPipelineInfo.stageCount = static_cast<uint32_t>(pbrShaderStages.size());
+    rayPipelineInfo.pStages = pbrShaderStages.data();
+
+    VK_CHECK_RESULT(
+        vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1,
+            &rayPipelineInfo, nullptr, &pipelines.RTX_PBR));
 }
 
 void CG::EngineImpl::DestroyRTXPipeline()
 {
+    vkDestroyPipeline(vkDevice->logicalDevice, pipelines.RTX_PBR, nullptr);
     vkDestroyPipeline(vkDevice->logicalDevice, pipelines.RTX, nullptr);
     vkDestroyPipelineLayout(vkDevice->logicalDevice,
         pipelineLayouts.rtxPipelineLayout, nullptr);
@@ -967,6 +1081,9 @@ void CG::EngineImpl::SetupRTXModelDescriptorSets()
                 VK_SHADER_STAGE_RAYGEN_BIT_NV },
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV },
             { 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+                VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV },
+            { 3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV },
+            { 4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                 VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV },
         });
 
@@ -1005,6 +1122,10 @@ void CG::EngineImpl::SetupRTXModelDescriptorSets()
         storageImageDescriptor.imageView = storageImage.view;
         storageImageDescriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
+        VkDescriptorImageInfo accumulationImageDescriptor {};
+        accumulationImageDescriptor.imageView = accumulationImage.view;
+        accumulationImageDescriptor.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
         std::vector<VkWriteDescriptorSet> writeDescriptorSets = {
             accelerationStructureWrite,
             Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaygen,
@@ -1013,6 +1134,12 @@ void CG::EngineImpl::SetupRTXModelDescriptorSets()
             Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaygen,
                 VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 2, &sceneUbo.descriptor),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaygen,
+                VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                3, &accumulationImageDescriptor),
+            Vk::Initializers::WriteDescriptorSet(descriptorSets.rtxRaygen,
+                VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                4, &cameraUbo.descriptor),
         };
         vkUpdateDescriptorSets(vkDevice->logicalDevice,
             static_cast<uint32_t>(writeDescriptorSets.size()),
@@ -1175,8 +1302,12 @@ void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
         descriptorSets.rtxRaymiss,
     };
 
+    VkPipeline pipeline = uiData.enablePreviewQuality ? pipelines.RTX_PBR : pipelines.RTX;
+    Vk::Buffer& shaderBindingTable = uiData.enablePreviewQuality ? shaderBindingTables.RTX_PBR : shaderBindingTables.RTX;
+
     vkCmdBindPipeline(drawCmdBuffers[swapChainImageIndex],
-        VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipelines.RTX);
+        VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipeline);
+
     vkCmdBindDescriptorSets(drawCmdBuffers[swapChainImageIndex],
         VK_PIPELINE_BIND_POINT_RAY_TRACING_NV,
         pipelineLayouts.rtxPipelineLayout, 0,

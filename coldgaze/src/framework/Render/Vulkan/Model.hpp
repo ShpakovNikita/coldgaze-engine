@@ -51,7 +51,7 @@ namespace Vk {
             AABBox GetAABB(const glm::mat4& m);
         };
 
-        // TODO: animations update
+        // TODO: animations
         // The vertex layout for the model
         struct Vertex {
             glm::vec4 pos;
@@ -243,13 +243,10 @@ namespace Vk {
 
         void LoadFromFile(const std::string& filename, float scale = 1.0f);
 
-        std::vector<Material>& GetMaterials();
+        std::vector<std::unique_ptr<Material>>& GetMaterials();
         const std::vector<Texture>& GetTextures() const;
         const std::vector<std::unique_ptr<Node>>& GetNodes() const;
         const std::vector<Node*>& GetFlatNodes() const;
-
-        void Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
-        void DrawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, const Node& node);
 
         bool IsLoaded() const;
         void SetLoaded(bool loaded);
@@ -285,7 +282,7 @@ namespace Vk {
 
         std::vector<Texture> textures;
         std::vector<TextureSampler> textureSamplers;
-        std::vector<Material> materials;
+        std::vector<std::unique_ptr<Material>> materials;
         std::vector<Animation> animations;
         std::vector<std::string> extensions;
 

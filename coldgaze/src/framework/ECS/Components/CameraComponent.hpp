@@ -42,14 +42,16 @@ struct CameraComponent {
         inline bool IsMoving() const { return up || down || right || left || wheelDelta > 0.0f; }
     } input = {};
 
+    void ResetSamples()
+    {
+        accumulationIndex = 0;
+    }
+
     float zoom = 1.0f;
 
-    // glm::vec3 rotation = glm::vec3(0.0f, 90.0f, 0.0f);
     glm::vec3 rotation = glm::vec3(0.0f, 0.0f, 0.0f);
     glm::vec3 position = glm::vec3(0.0f, 0.0f, -zoom);
 
-    // TODO: remove device and memory
-    CG::Vk::Device* vkDevice;
     CG::Vk::UniformBufferVS uniformBufferVS;
 
     float fov = 60.0f;
@@ -58,6 +60,8 @@ struct CameraComponent {
     float sensitivity = 0.5f;
 
     bool isActive = true;
+
+    int accumulationIndex = 0;
 
     CameraType cameraType = CameraType::kFirstPerson;
 

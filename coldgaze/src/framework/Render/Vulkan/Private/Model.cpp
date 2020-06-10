@@ -18,18 +18,6 @@
 #include <mutex>
 
 namespace SGLTFModel {
-using UString = std::basic_string<uint8_t>;
-
-UString FloatToUnsignedColor(const glm::vec4 color)
-{
-    return {
-        static_cast<uint8_t>(color.r * 255.0f),
-        static_cast<uint8_t>(color.g * 255.0f),
-        static_cast<uint8_t>(color.b * 255.0f),
-        static_cast<uint8_t>(color.a * 255.0f),
-    };
-}
-
 CG::Vk::GLTFModel::Node* FindNode(CG::Vk::GLTFModel::Node* parent, uint32_t index)
 {
     CG::Vk::GLTFModel::Node* nodeFound = nullptr;
@@ -56,6 +44,17 @@ CG::Vk::GLTFModel::Node* NodeFromIndex(uint32_t index, const std::vector<std::un
     }
     return nodeFound;
 }
+
+template <typename T>
+void FillVertexAttribute(const tinygltf::Primitive& primitive, const tinygltf::Model& input, const std::string& attrName, int compSize, const T** buffer, int& bufferStride)
+{
+    if (primitive.attributes.find(attrName) != primitive.attributes.end()) {
+        const tinygltf::Accessor& accessor = input.accessors[primitive.attributes.find(attrName)->second];
+        const tinygltf::BufferView& view = input.bufferViews[accessor.bufferView];
+        *buffer = reinterpret_cast<const T*>(&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+        bufferStride = accessor.ByteStride(view) ? (accessor.ByteStride(view) / sizeof(T)) : tinygltf::GetNumComponentsInType(compSize);
+    }
+}
 }
 
 CG::Vk::GLTFModel::GLTFModel()
@@ -68,6 +67,19 @@ CG::Vk::GLTFModel::~GLTFModel()
 
     for (auto& texture : textures) {
         texture.texture.Destroy();
+    }
+
+    for (auto& material : materials) {
+        material->materialParams.Destroy();
+    }
+
+    for (auto& node : allNodes) {
+        if (node->mesh) {
+            for (auto& primitive : node->mesh->primitives) {
+                primitive->vertices.Destroy();
+                primitive->indices.Destroy();
+            }
+        }
     }
 }
 
@@ -86,6 +98,10 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*
         LoadTextureSamplers(glTFInput);
         LoadTextures(glTFInput);
         LoadMaterials(glTFInput);
+
+        if (glTFInput.scenes.empty()) {
+            throw AssetLoadingException("Could not the load file!");
+        }
 
         const tinygltf::Scene& scene = glTFInput.scenes[glTFInput.defaultScene > -1 ? glTFInput.defaultScene : 0];
         for (size_t i = 0; i < scene.nodes.size(); i++) {
@@ -116,7 +132,7 @@ void CG::Vk::GLTFModel::LoadFromFile(const std::string& filename, float scale /*
     extensions = glTFInput.extensionsUsed;
 }
 
-std::vector<CG::Vk::GLTFModel::Material>& CG::Vk::GLTFModel::GetMaterials()
+std::vector<std::unique_ptr<CG::Vk::GLTFModel::Material>>& CG::Vk::GLTFModel::GetMaterials()
 {
     return materials;
 }
@@ -134,21 +150,6 @@ const std::vector<std::unique_ptr<CG::Vk::GLTFModel::Node>>& CG::Vk::GLTFModel::
 const std::vector<CG::Vk::GLTFModel::Node*>& CG::Vk::GLTFModel::GetFlatNodes() const
 {
     return allNodes;
-}
-
-void CG::Vk::GLTFModel::Draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
-{
-    // VkDeviceSize offsets[1] = { 0 };
-    // vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertices.buffer.buffer, offsets);
-    // vkCmdBindIndexBuffer(commandBuffer, indices.buffer.buffer, 0, VK_INDEX_TYPE_UINT32);
-    // Render all nodes at top-level
-    for (auto& node : nodes) {
-        DrawNode(commandBuffer, pipelineLayout, *node);
-    }
-}
-
-void CG::Vk::GLTFModel::DrawNode(VkCommandBuffer, VkPipelineLayout, const Node&)
-{
 }
 
 bool CG::Vk::GLTFModel::IsLoaded() const
@@ -252,74 +253,74 @@ void CG::Vk::GLTFModel::LoadTextures(const tinygltf::Model& input)
 void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
 {
     for (const tinygltf::Material& mat : input.materials) {
-        Material material = {};
+        std::unique_ptr<Material> material = std::make_unique<Material>();
         if (mat.values.find("baseColorTexture") != mat.values.end()) {
-            material.baseColorTexture = &textures[mat.values.at("baseColorTexture").TextureIndex()];
-            material.texCoordSets.baseColor = mat.values.at("baseColorTexture").TextureTexCoord();
+            material->baseColorTexture = &textures[mat.values.at("baseColorTexture").TextureIndex()];
+            material->texCoordSets.baseColor = mat.values.at("baseColorTexture").TextureTexCoord();
         }
         if (mat.values.find("metallicRoughnessTexture") != mat.values.end()) {
-            material.metallicRoughnessTexture = &textures[mat.values.at("metallicRoughnessTexture").TextureIndex()];
-            material.texCoordSets.metallicRoughness = mat.values.at("metallicRoughnessTexture").TextureTexCoord();
+            material->metallicRoughnessTexture = &textures[mat.values.at("metallicRoughnessTexture").TextureIndex()];
+            material->texCoordSets.metallicRoughness = mat.values.at("metallicRoughnessTexture").TextureTexCoord();
         }
         if (mat.values.find("roughnessFactor") != mat.values.end()) {
-            material.roughnessFactor = static_cast<float>(mat.values.at("roughnessFactor").Factor());
+            material->roughnessFactor = static_cast<float>(mat.values.at("roughnessFactor").Factor());
         }
         if (mat.values.find("metallicFactor") != mat.values.end()) {
-            material.metallicFactor = static_cast<float>(mat.values.at("metallicFactor").Factor());
+            material->metallicFactor = static_cast<float>(mat.values.at("metallicFactor").Factor());
         }
         if (mat.values.find("baseColorFactor") != mat.values.end()) {
-            material.baseColorFactor = glm::make_vec4(mat.values.at("baseColorFactor").ColorFactor().data());
+            material->baseColorFactor = glm::make_vec4(mat.values.at("baseColorFactor").ColorFactor().data());
         }
         if (mat.additionalValues.find("normalTexture") != mat.additionalValues.end()) {
-            material.normalTexture = &textures[mat.additionalValues.at("normalTexture").TextureIndex()];
-            material.texCoordSets.normal = mat.additionalValues.at("normalTexture").TextureTexCoord();
+            material->normalTexture = &textures[mat.additionalValues.at("normalTexture").TextureIndex()];
+            material->texCoordSets.normal = mat.additionalValues.at("normalTexture").TextureTexCoord();
         }
         if (mat.additionalValues.find("emissiveTexture") != mat.additionalValues.end()) {
-            material.emissiveTexture = &textures[mat.additionalValues.at("emissiveTexture").TextureIndex()];
-            material.texCoordSets.emissive = mat.additionalValues.at("emissiveTexture").TextureTexCoord();
+            material->emissiveTexture = &textures[mat.additionalValues.at("emissiveTexture").TextureIndex()];
+            material->texCoordSets.emissive = mat.additionalValues.at("emissiveTexture").TextureTexCoord();
         }
         if (mat.additionalValues.find("occlusionTexture") != mat.additionalValues.end()) {
-            material.occlusionTexture = &textures[mat.additionalValues.at("occlusionTexture").TextureIndex()];
-            material.texCoordSets.occlusion = mat.additionalValues.at("occlusionTexture").TextureTexCoord();
+            material->occlusionTexture = &textures[mat.additionalValues.at("occlusionTexture").TextureIndex()];
+            material->texCoordSets.occlusion = mat.additionalValues.at("occlusionTexture").TextureTexCoord();
         }
         if (mat.additionalValues.find("alphaMode") != mat.additionalValues.end()) {
             tinygltf::Parameter param = mat.additionalValues.at("alphaMode");
             if (param.string_value == "BLEND") {
-                material.alphaMode = Material::eAlphaMode::kAlphaModeBlend;
+                material->alphaMode = Material::eAlphaMode::kAlphaModeBlend;
             }
             if (param.string_value == "MASK") {
-                material.alphaCutoff = 0.5f;
-                material.alphaMode = Material::eAlphaMode::kAlphaModeMask;
+                material->alphaCutoff = 0.5f;
+                material->alphaMode = Material::eAlphaMode::kAlphaModeMask;
             }
         }
         if (mat.additionalValues.find("alphaCutoff") != mat.additionalValues.end()) {
-            material.alphaCutoff = static_cast<float>(mat.additionalValues.at("alphaCutoff").Factor());
+            material->alphaCutoff = static_cast<float>(mat.additionalValues.at("alphaCutoff").Factor());
         }
         if (mat.additionalValues.find("emissiveFactor") != mat.additionalValues.end()) {
-            material.emissiveFactor = glm::vec4(glm::make_vec3(mat.additionalValues.at("emissiveFactor").ColorFactor().data()), 1.0);
-            material.emissiveFactor = glm::vec4(0.0f);
+            material->emissiveFactor = glm::vec4(glm::make_vec3(mat.additionalValues.at("emissiveFactor").ColorFactor().data()), 1.0);
+            material->emissiveFactor = glm::vec4(0.0f);
         }
 
         Material::MaterialParams materialParams;
 
-        materialParams.baseColorFactor = material.baseColorFactor;
-        materialParams.metallicFactor = material.metallicFactor;
-        materialParams.roughnessFactor = material.roughnessFactor;
-        materialParams.emissiveFactor = material.emissiveFactor;
+        materialParams.baseColorFactor = material->baseColorFactor;
+        materialParams.metallicFactor = material->metallicFactor;
+        materialParams.roughnessFactor = material->roughnessFactor;
+        materialParams.emissiveFactor = material->emissiveFactor;
 
         // Notice: this value used in shader
         materialParams.workflow = 0.0f;
 
-        materialParams.colorTextureSet = material.baseColorTexture != nullptr ? material.texCoordSets.baseColor : -1;
-        materialParams.physicalDescriptorTextureSet = material.metallicRoughnessTexture != nullptr ? material.texCoordSets.metallicRoughness : -1;
-        materialParams.normalTextureSet = material.normalTexture != nullptr ? material.texCoordSets.normal : -1;
-        materialParams.occlusionTextureSet = material.occlusionTexture != nullptr ? material.texCoordSets.occlusion : -1;
-        materialParams.emissiveTextureSet = material.emissiveTexture != nullptr ? material.texCoordSets.emissive : -1;
+        materialParams.colorTextureSet = material->baseColorTexture != nullptr ? material->texCoordSets.baseColor : -1;
+        materialParams.physicalDescriptorTextureSet = material->metallicRoughnessTexture != nullptr ? material->texCoordSets.metallicRoughness : -1;
+        materialParams.normalTextureSet = material->normalTexture != nullptr ? material->texCoordSets.normal : -1;
+        materialParams.occlusionTextureSet = material->occlusionTexture != nullptr ? material->texCoordSets.occlusion : -1;
+        materialParams.emissiveTextureSet = material->emissiveTexture != nullptr ? material->texCoordSets.emissive : -1;
 
-        materialParams.baseColorFactor = material.baseColorFactor;
-        materialParams.metallicFactor = material.metallicFactor;
-        materialParams.roughnessFactor = material.roughnessFactor;
-        materialParams.alphaMaskCutoff = material.alphaCutoff;
+        materialParams.baseColorFactor = material->baseColorFactor;
+        materialParams.metallicFactor = material->metallicFactor;
+        materialParams.roughnessFactor = material->roughnessFactor;
+        materialParams.alphaMaskCutoff = material->alphaCutoff;
 
         size_t materialBufferSize = sizeof(Material::MaterialParams);
 
@@ -336,7 +337,7 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
         VK_CHECK_RESULT(vkDevice->CreateBuffer(
             VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            &material.materialParams,
+            &material->materialParams,
             materialBufferSize));
 
         VkCommandBuffer copyCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
@@ -346,17 +347,17 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
         vkCmdCopyBuffer(
             copyCmd,
             materialStaging.buffer,
-            material.materialParams.buffer,
+            material->materialParams.buffer,
             1,
             &copyRegion);
 
         vkDevice->FlushCommandBuffer(copyCmd, queue, true);
         materialStaging.Destroy();
 
-        materials.push_back(material);
+        materials.push_back(std::move(material));
     }
     // Push a default material at the end of the list for meshes with no material assigned
-    materials.push_back(Material());
+    materials.push_back(std::move(std::make_unique<Material>()));
 }
 
 void CG::Vk::GLTFModel::LoadAnimations(const tinygltf::Model& input)
@@ -658,49 +659,17 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
                 assert(primitive.attributes.find("POSITION") != primitive.attributes.end());
 
                 const tinygltf::Accessor& posAccessor = input.accessors[primitive.attributes.find("POSITION")->second];
-                const tinygltf::BufferView& posView = input.bufferViews[posAccessor.bufferView];
-                bufferPos = reinterpret_cast<const float*>(&(input.buffers[posView.buffer].data[posAccessor.byteOffset + posView.byteOffset]));
                 vertexCount = static_cast<uint32_t>(posAccessor.count);
-                posByteStride = posAccessor.ByteStride(posView) ? (posAccessor.ByteStride(posView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
+
+                SGLTFModel::FillVertexAttribute(primitive, input, "POSITION", TINYGLTF_TYPE_VEC3, &bufferPos, posByteStride);
+                SGLTFModel::FillVertexAttribute(primitive, input, "NORMAL", TINYGLTF_TYPE_VEC3, &bufferNormals, normByteStride);
+                SGLTFModel::FillVertexAttribute(primitive, input, "TEXCOORD_0", TINYGLTF_TYPE_VEC2, &bufferTexCoordSet0, uv0ByteStride);
+                SGLTFModel::FillVertexAttribute(primitive, input, "TEXCOORD_1", TINYGLTF_TYPE_VEC2, &bufferTexCoordSet1, uv1ByteStride);
+                SGLTFModel::FillVertexAttribute(primitive, input, "JOINTS_0", TINYGLTF_TYPE_VEC4, &bufferJoints, jointByteStride);
+                SGLTFModel::FillVertexAttribute(primitive, input, "JOINTS_0", TINYGLTF_TYPE_VEC4, &bufferWeights, weightByteStride);
 
                 posMin = glm::vec3(posAccessor.minValues[0], posAccessor.minValues[1], posAccessor.minValues[2]);
                 posMax = glm::vec3(posAccessor.maxValues[0], posAccessor.maxValues[1], posAccessor.maxValues[2]);
-
-                // TODO: refactor after working scene establishing
-                if (primitive.attributes.find("NORMAL") != primitive.attributes.end()) {
-                    const tinygltf::Accessor& normAccessor = input.accessors[primitive.attributes.find("NORMAL")->second];
-                    const tinygltf::BufferView& normView = input.bufferViews[normAccessor.bufferView];
-                    bufferNormals = reinterpret_cast<const float*>(&(input.buffers[normView.buffer].data[normAccessor.byteOffset + normView.byteOffset]));
-                    normByteStride = normAccessor.ByteStride(normView) ? (normAccessor.ByteStride(normView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC3);
-                }
-
-                if (primitive.attributes.find("TEXCOORD_0") != primitive.attributes.end()) {
-                    const tinygltf::Accessor& uvAccessor = input.accessors[primitive.attributes.find("TEXCOORD_0")->second];
-                    const tinygltf::BufferView& uvView = input.bufferViews[uvAccessor.bufferView];
-                    bufferTexCoordSet0 = reinterpret_cast<const float*>(&(input.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
-                    uv0ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC2);
-                }
-
-                if (primitive.attributes.find("TEXCOORD_1") != primitive.attributes.end()) {
-                    const tinygltf::Accessor& uvAccessor = input.accessors[primitive.attributes.find("TEXCOORD_1")->second];
-                    const tinygltf::BufferView& uvView = input.bufferViews[uvAccessor.bufferView];
-                    bufferTexCoordSet1 = reinterpret_cast<const float*>(&(input.buffers[uvView.buffer].data[uvAccessor.byteOffset + uvView.byteOffset]));
-                    uv1ByteStride = uvAccessor.ByteStride(uvView) ? (uvAccessor.ByteStride(uvView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC2);
-                }
-
-                if (primitive.attributes.find("JOINTS_0") != primitive.attributes.end()) {
-                    const tinygltf::Accessor& jointAccessor = input.accessors[primitive.attributes.find("JOINTS_0")->second];
-                    const tinygltf::BufferView& jointView = input.bufferViews[jointAccessor.bufferView];
-                    bufferJoints = reinterpret_cast<const uint16_t*>(&(input.buffers[jointView.buffer].data[jointAccessor.byteOffset + jointView.byteOffset]));
-                    jointByteStride = jointAccessor.ByteStride(jointView) ? (jointAccessor.ByteStride(jointView) / sizeof(bufferJoints[0])) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC4);
-                }
-
-                if (primitive.attributes.find("WEIGHTS_0") != primitive.attributes.end()) {
-                    const tinygltf::Accessor& weightAccessor = input.accessors[primitive.attributes.find("WEIGHTS_0")->second];
-                    const tinygltf::BufferView& weightView = input.bufferViews[weightAccessor.bufferView];
-                    bufferWeights = reinterpret_cast<const float*>(&(input.buffers[weightView.buffer].data[weightAccessor.byteOffset + weightView.byteOffset]));
-                    weightByteStride = weightAccessor.ByteStride(weightView) ? (weightAccessor.ByteStride(weightView) / sizeof(float)) : tinygltf::GetNumComponentsInType(TINYGLTF_TYPE_VEC4);
-                }
 
                 hasSkin = (bufferJoints && bufferWeights);
 
@@ -762,7 +731,7 @@ void CG::Vk::GLTFModel::LoadNode(Node* parent, const tinygltf::Node& node, uint3
 
             // loading last material as default one
             std::unique_ptr<Primitive> newPrimitive = std::make_unique<Primitive>(indexStart, vertexStart, indexCount, vertexCount,
-                primitive.material > -1 ? materials[primitive.material] : materials.back());
+                primitive.material > -1 ? *materials[primitive.material] : *materials.back());
             newPrimitive->bbox = AABBox(posMin, posMax);
 
             CreatePrimitiveBuffers(newPrimitive.get(), vertexBuffer, indexBuffer);

@@ -58,15 +58,26 @@ private:
         uint64_t accelerationStructureHandle;
     };
 
+    struct CameraUboData {
+        int bouncesCount = 16;
+        int numberOfSamples = 16;
+        float aperture = 0.0f;
+        float focusDistance = 13.0f;
+        int pauseRendering = false;
+        int accumulationIndex = 0;
+        int randomSeed;
+    } cameraUboData = {};
+
+    Vk::Buffer cameraUbo;
+
     struct UISettings {
         std::array<float, 50> frameTimes {};
         float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
         glm::vec4 bgColor = { 0.569f, 0.553f, 0.479f, 1.0f };
         bool isActive = true;
-        bool drawWire = false;
         bool useSampleShading = false;
-        float fov = 60.f;
-
+        bool enablePreviewQuality = false;
+        CameraUboData cameraUboData = {};
     } uiData = {};
 
     struct SceneShaderUniformData {
@@ -104,6 +115,7 @@ private:
 
     struct RenderPipelines {
         VkPipeline RTX;
+        VkPipeline RTX_PBR;
     } pipelines = {};
 
     void FlushCommandBuffer(VkCommandBuffer commandBuffer);
@@ -138,7 +150,10 @@ private:
     void CreateNVRayTracingStoreImage();
     void DestroyNVRayTracingStoreImage();
 
-    void CreateShaderBindingTable();
+    void CreateNVRayTracingAccumulationImage();
+    void DestroyNVRayTracingAccumulationImage();
+
+    void CreateShaderBindingTable(Vk::Buffer& shaderBindingTable, VkPipeline pipeline);
     VkDeviceSize CopyShaderIdentifier(uint8_t* data, const uint8_t* shaderHandleStorage, uint32_t groupIndex);
 
     void CreateRTXPipeline();
@@ -165,7 +180,10 @@ private:
 
     std::unique_ptr<Vk::GLTFModel> testScene;
 
-    Vk::Buffer shaderBindingTable;
+    struct ShaderBindingTables {
+        Vk::Buffer RTX;
+        Vk::Buffer RTX_PBR;
+    } shaderBindingTables;
 
     PFN_vkCreateAccelerationStructureNV vkCreateAccelerationStructureNV;
     PFN_vkDestroyAccelerationStructureNV vkDestroyAccelerationStructureNV;
@@ -184,8 +202,11 @@ private:
         VkFormat format;
     } storageImage;
 
-    // TODO: remove
-    Vk::Buffer vertexBuffer;
-    Vk::Buffer indexBuffer;
+    struct AccumulationImage {
+        VkDeviceMemory memory;
+        VkImage image;
+        VkImageView view;
+        VkFormat format;
+    } accumulationImage;
 };
 }
