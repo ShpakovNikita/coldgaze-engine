@@ -45,6 +45,9 @@ CG::EngineImpl::EngineImpl(CG::EngineConfig& engineConfig)
     enabledDeviceExtensions.push_back(VK_NV_RAY_TRACING_EXTENSION_NAME);
     enabledDeviceExtensions.push_back(VK_KHR_MAINTENANCE3_EXTENSION_NAME);
     enabledDeviceExtensions.push_back(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+
+    const size_t kFrameTimesCount = 100;
+    uiData.frameTimes.resize(kFrameTimesCount, 0.0f);
 }
 
 CG::EngineImpl::~EngineImpl() = default;
@@ -55,6 +58,7 @@ void CG::EngineImpl::RenderFrame(float deltaTime)
 
     PrepareFrame();
 
+    UpdateFrameData(deltaTime);
     imGui->UpdateUI(deltaTime);
 
     BuildCommandBuffers();
@@ -196,10 +200,7 @@ void CG::EngineImpl::BuildCommandBuffers()
     cmdBufInfo.pNext = nullptr;
 
     std::array<VkClearValue, 2> clearValues;
-    clearValues[0].color = { uiData.bgColor.r, uiData.bgColor.g, uiData.bgColor.b,
-        uiData.bgColor.a };
-    // clearValues[1].color = { uiData.bgColor.r, uiData.bgColor.g,
-    // uiData.bgColor.b, uiData.bgColor.a };
+    clearValues[0].color = { 1.0, 1.0, 1.0, 1.0 };
     clearValues[1].depthStencil = { 1.0f, 0 };
 
     VkRenderPassBeginInfo renderPassBeginInfo = {};
@@ -364,30 +365,45 @@ void CG::EngineImpl::DrawUI()
         ImGui::Begin("Coldgaze overlay", &uiData.isActive,
             ImGuiWindowFlags_MenuBar);
 
-        // Edit a color (stored as ~4 floats)
-        ImGui::ColorEdit4("Background", &uiData.bgColor.x,
-            ImGuiColorEditFlags_NoInputs);
+        ImGui::Text("Hints");
 
-        ImGui::Checkbox("Enable preview quality", &uiData.enablePreviewQuality);
+        ImGui::Text("Press F to reset camera view");
+        ImGui::Text("Click on the screen to restart rendering");
 
-        // Plot some values
-        const float dummyData[] = { 0.2f, 0.1f, 1.0f, 0.5f, 0.9f, 2.2f };
-        ImGui::PlotLines("Frame Times", dummyData, IM_ARRAYSIZE(dummyData));
+        ImGui::Separator();
 
-        const float oldFov = cameraComponent->fov;
-        ImGui::SliderFloat("Camera FOV:", &cameraComponent->fov, 10.0f, 135.0f);
+        {
+            ImGui::Text("Frame time profiling");
+            ImGui::PlotLines("Frame Times", uiData.frameTimes.data(), static_cast<int>(uiData.frameTimes.size()), 0, "", 0.0f, 0.1f);
+            ImGui::Text("Frame rate: %.1f fps", uiData.fps);
+        }
+
+        ImGui::Separator();
 
         CameraUboData oldCameraUbo = cameraUboData;
+        const float oldFov = cameraComponent->fov;
 
-        ImGui::SliderInt("Bounces count:", &cameraUboData.bouncesCount, 1, 64);
-        ImGui::SliderInt("Number of samples:", &cameraUboData.numberOfSamples, 1, 64);
-        ImGui::SliderFloat("Aperture:", &cameraUboData.aperture, 0.0f, 1.0f);
-        ImGui::SliderFloat("Focus distance:", &cameraUboData.focusDistance, 0.0f, 64.0f);
+        {
+            bool pauseRendering = static_cast<bool>(cameraUboData.pauseRendering);
 
-        if (cameraUboData.pauseRendering) {
-            cameraUboData.pauseRendering = !ImGui::Button("Resume");
-        } else {
-            cameraUboData.pauseRendering = ImGui::Button("Pause");
+            ImGui::Text("Renderer settings");
+            ImGui::Checkbox("Enable preview quality", &uiData.enablePreviewQuality);
+            ImGui::Checkbox("Pause rendering", &pauseRendering);
+            ImGui::SliderInt("Bounces count", &cameraUboData.bouncesCount, 1, 64);
+            ImGui::SliderInt("Number of samples", &cameraUboData.numberOfSamples, 1, 64);
+
+            cameraUboData.pauseRendering = static_cast<int>(pauseRendering);
+        }
+
+        ImGui::Separator();
+
+        {
+            ImGui::Text("Camera settings");
+
+            ImGui::SliderFloat("Camera FOV", &cameraComponent->fov, 10.0f, 135.0f);
+
+            ImGui::SliderFloat("Aperture", &cameraUboData.aperture, 0.0f, 1.0f);
+            ImGui::SliderFloat("Focus distance", &cameraUboData.focusDistance, 0.0f, 32.0f);
         }
 
         if (std::tie(oldCameraUbo.aperture, oldCameraUbo.bouncesCount, oldCameraUbo.focusDistance, oldCameraUbo.numberOfSamples) != std::tie(cameraUboData.aperture, cameraUboData.bouncesCount, cameraUboData.focusDistance, cameraUboData.numberOfSamples)
@@ -403,6 +419,7 @@ void CG::EngineImpl::DrawUI()
             if (ImGui::BeginMenu("File")) {
                 ImGui::MenuItem("File menu", nullptr, false, false);
                 {
+
                     if (ImGui::MenuItem("Open scene", "*.gltf")) {
                         nfdchar_t* outPath = nullptr;
 #pragma warning(push)
@@ -677,10 +694,12 @@ void CG::EngineImpl::CreateTopLevelAccelerationStructure()
         VK_CHECK_RESULT(vkBindAccelerationStructureMemoryNV(
             vkDevice->logicalDevice, 1, &accelerationStructureMemoryInfo));
 
+
         VK_CHECK_RESULT(vkGetAccelerationStructureHandleNV(
             vkDevice->logicalDevice, topLevelAS.accelerationStructure,
             sizeof(uint64_t), &topLevelAS.handle));
     }
+
 
     {
         // Single instance with a 3x4 transform matrix for the ray traced triangle
@@ -805,6 +824,7 @@ void CG::EngineImpl::CreateNVRayTracingGeometry()
                 geometry.geometry.aabbs = {};
                 geometry.geometry.aabbs.sType = VK_STRUCTURE_TYPE_GEOMETRY_AABB_NV;
                 geometry.flags = VK_GEOMETRY_OPAQUE_BIT_NV;
+
 
                 blasData[currentGeomIndex].transform = sceneUboData.model * node->GetWorldMatrix();
                 CreateBottomLevelAccelerationStructure(&geometry, currentGeomIndex, 1);
@@ -1361,4 +1381,18 @@ void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
         storageImage.image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_IMAGE_LAYOUT_GENERAL, subresourceRange);
+}
+
+void CG::EngineImpl::UpdateFrameData(float deltaTime)
+{
+    uiData.fps = 1.0f / deltaTime;
+
+    {
+        // Shift vector values to create circular buffer effect
+        for (size_t i = 1; i < uiData.frameTimes.size(); ++i)
+        {
+            uiData.frameTimes[i - 1] = uiData.frameTimes[i];
+        }
+        uiData.frameTimes[uiData.frameTimes.size() - 1] = deltaTime;
+    }
 }

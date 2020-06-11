@@ -138,7 +138,6 @@ vec3 RandomInUnitSphere(inout uint seed)
 	}
 }
 
-
 // https://en.wikipedia.org/wiki/Schlick%27s_approximation
 float FresnelSchlick(float cosTheta, float refractionIndex)
 {
@@ -199,10 +198,11 @@ RayPayload ScatterDiffuseLight(Material material, float distance, inout uint see
 RayPayload Scatter(Material material, vec3 direction, VertexData vertexData, float distance, inout uint seed, PBRParams pbrParams)
 {
 	const vec3 normDirection = normalize(direction);
+    // return ScatterLambertian(material, normDirection, pbrParams, vertexData, distance, seed);
     return ScatterMetallic(material, normDirection, pbrParams, vertexData, distance, seed);
     return ScatterDiffuseLight(material, distance, seed);
     return ScatterDieletric(material, normDirection, pbrParams, vertexData, distance, seed);
-	return ScatterLambertian(material, normDirection, pbrParams, vertexData, distance, seed);
+	
 }
 
 vec2 dFdy(vec2 p)

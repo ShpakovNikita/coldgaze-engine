@@ -94,9 +94,8 @@ vec3 RandomInUnitSphere(inout uint seed)
 }
 
 void main() 
-{    
-    uint pixelRandomSeed = camera.randomSeed;
-    rayPayload.randomSeed = InitRandomSeed(InitRandomSeed(gl_LaunchIDNV.x, gl_LaunchIDNV.y), camera.numberOfSamples);
+{
+    rayPayload.randomSeed = InitRandomSeed(InitRandomSeed(gl_LaunchIDNV.x, gl_LaunchIDNV.y), camera.randomSeed);
     ivec2 storePos = ivec2(gl_LaunchIDNV.x, gl_LaunchSizeNV.y - gl_LaunchIDNV.y);
 
     vec3 accumulationColor = imageLoad(accumulationImage, storePos).rgb;
@@ -110,7 +109,7 @@ void main()
      
     for (uint s = 0; s < camera.numberOfSamples; ++s)
     {
-        const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + RandomFloat(pixelRandomSeed);
+        const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + RandomFloat(rayPayload.randomSeed);
         const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeNV.xy);
         vec2 d = inUV * 2.0 - 1.0;
 

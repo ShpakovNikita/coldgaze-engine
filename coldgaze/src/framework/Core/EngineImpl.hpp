@@ -71,9 +71,9 @@ private:
     Vk::Buffer cameraUbo;
 
     struct UISettings {
-        std::array<float, 50> frameTimes {};
+        std::vector<float> frameTimes = {};
+        float fps = 0;
         float frameTimeMin = 9999.0f, frameTimeMax = 0.0f;
-        glm::vec4 bgColor = { 0.569f, 0.553f, 0.479f, 1.0f };
         bool isActive = true;
         bool useSampleShading = false;
         bool enablePreviewQuality = false;
@@ -165,6 +165,8 @@ private:
     void SetupRTXModelDescriptorSets();
     void SetupRTXEnviromentDescriptorSet();
     void DrawRayTracingData(uint32_t swapChainImageIndex);
+
+    void UpdateFrameData(float deltaTime);
 
     CG::Vk::UniformBufferVS* uniformBufferVS = nullptr;
 
