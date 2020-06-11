@@ -77,6 +77,7 @@ private:
         bool isActive = true;
         bool useSampleShading = false;
         bool enablePreviewQuality = false;
+        bool enablePBRMaterials = false;
         CameraUboData cameraUboData = {};
     } uiData = {};
 
@@ -116,6 +117,7 @@ private:
     struct RenderPipelines {
         VkPipeline RTX;
         VkPipeline RTX_PBR;
+        VkPipeline previewRTX;
     } pipelines = {};
 
     void FlushCommandBuffer(VkCommandBuffer commandBuffer);
@@ -185,6 +187,7 @@ private:
     struct ShaderBindingTables {
         Vk::Buffer RTX;
         Vk::Buffer RTX_PBR;
+        Vk::Buffer previewRTX;
     } shaderBindingTables;
 
     PFN_vkCreateAccelerationStructureNV vkCreateAccelerationStructureNV;

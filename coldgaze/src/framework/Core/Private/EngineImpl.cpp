@@ -105,6 +105,7 @@ void CG::EngineImpl::Prepare()
         "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
 
     CreateShaderBindingTable(shaderBindingTables.RTX, pipelines.RTX);
+    CreateShaderBindingTable(shaderBindingTables.previewRTX, pipelines.previewRTX);
     CreateShaderBindingTable(shaderBindingTables.RTX_PBR, pipelines.RTX_PBR);
 
     BuildCommandBuffers();
@@ -309,6 +310,7 @@ void CG::EngineImpl::PrepareUniformBuffers()
 
 void CG::EngineImpl::UpdateUniformBuffers()
 {
+
     glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
 
     sceneUboData.globalLightDir = glm::vec4(
@@ -316,7 +318,7 @@ void CG::EngineImpl::UpdateUniformBuffers()
         sin(glm::radians(rotation.y)),
         cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)), 0.0f);
 
-    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 5.0f;
+    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 3.0f;
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
 
@@ -388,6 +390,7 @@ void CG::EngineImpl::DrawUI()
 
             ImGui::Text("Renderer settings");
             ImGui::Checkbox("Enable preview quality", &uiData.enablePreviewQuality);
+            ImGui::Checkbox("Enable PBR materials", &uiData.enablePBRMaterials);
             ImGui::Checkbox("Pause rendering", &pauseRendering);
             ImGui::SliderInt("Bounces count", &cameraUboData.bouncesCount, 1, 64);
             ImGui::SliderInt("Number of samples", &cameraUboData.numberOfSamples, 1, 64);
@@ -403,7 +406,7 @@ void CG::EngineImpl::DrawUI()
             ImGui::SliderFloat("Camera FOV", &cameraComponent->fov, 10.0f, 135.0f);
 
             ImGui::SliderFloat("Aperture", &cameraUboData.aperture, 0.0f, 1.0f);
-            ImGui::SliderFloat("Focus distance", &cameraUboData.focusDistance, 0.0f, 32.0f);
+            ImGui::SliderFloat("Focus distance", &cameraUboData.focusDistance, 0.001f, 32.0f);
         }
 
         if (std::tie(oldCameraUbo.aperture, oldCameraUbo.bouncesCount, oldCameraUbo.focusDistance, oldCameraUbo.numberOfSamples) != std::tie(cameraUboData.aperture, cameraUboData.bouncesCount, cameraUboData.focusDistance, cameraUboData.numberOfSamples)
@@ -1057,12 +1060,27 @@ void CG::EngineImpl::CreateRTXPipeline()
         vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1,
             &rayPipelineInfo, nullptr, &pipelines.RTX));
 
-    std::array<VkPipelineShaderStageCreateInfo, 3> pbrShaderStages;
-    pbrShaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygen_PBR.rgen.spv",
+    std::array<VkPipelineShaderStageCreateInfo, 3> previewShaderStages;
+    previewShaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygenPreview.rgen.spv",
         VK_SHADER_STAGE_RAYGEN_BIT_NV);
-    pbrShaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/miss_PBR.rmiss.spv",
+    previewShaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/missPreview.rmiss.spv",
         VK_SHADER_STAGE_MISS_BIT_NV);
-    pbrShaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthit_PBR.rchit.spv",
+    previewShaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthitPreview.rchit.spv",
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV);
+
+    rayPipelineInfo.stageCount = static_cast<uint32_t>(previewShaderStages.size());
+    rayPipelineInfo.pStages = previewShaderStages.data();
+
+    VK_CHECK_RESULT(
+        vkCreateRayTracingPipelinesNV(vkDevice->logicalDevice, VK_NULL_HANDLE, 1,
+            &rayPipelineInfo, nullptr, &pipelines.previewRTX));
+
+    std::array<VkPipelineShaderStageCreateInfo, 3> pbrShaderStages;
+    pbrShaderStages[shaderIndexRaygen] = LoadShader(GetAssetPath() + "shaders/compiled/raygenPBR.rgen.spv",
+        VK_SHADER_STAGE_RAYGEN_BIT_NV);
+    pbrShaderStages[shaderIndexMiss] = LoadShader(GetAssetPath() + "shaders/compiled/missPBR.rmiss.spv",
+        VK_SHADER_STAGE_MISS_BIT_NV);
+    pbrShaderStages[shaderIndexClosestHit] = LoadShader(GetAssetPath() + "shaders/compiled/closesthitPBR.rchit.spv",
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV);
 
     rayPipelineInfo.stageCount = static_cast<uint32_t>(pbrShaderStages.size());
@@ -1075,6 +1093,7 @@ void CG::EngineImpl::CreateRTXPipeline()
 
 void CG::EngineImpl::DestroyRTXPipeline()
 {
+    vkDestroyPipeline(vkDevice->logicalDevice, pipelines.previewRTX, nullptr);
     vkDestroyPipeline(vkDevice->logicalDevice, pipelines.RTX_PBR, nullptr);
     vkDestroyPipeline(vkDevice->logicalDevice, pipelines.RTX, nullptr);
     vkDestroyPipelineLayout(vkDevice->logicalDevice,
@@ -1322,8 +1341,24 @@ void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
         descriptorSets.rtxRaymiss,
     };
 
-    VkPipeline pipeline = uiData.enablePreviewQuality ? pipelines.RTX_PBR : pipelines.RTX;
-    Vk::Buffer& shaderBindingTable = uiData.enablePreviewQuality ? shaderBindingTables.RTX_PBR : shaderBindingTables.RTX;
+    VkPipeline pipeline;
+    Vk::Buffer* shaderBindingTable = nullptr;
+    
+    if (uiData.enablePreviewQuality)
+    {
+        pipeline = pipelines.previewRTX;
+        shaderBindingTable = &shaderBindingTables.previewRTX;
+    } 
+    else if (uiData.enablePBRMaterials)
+    {
+        pipeline = pipelines.RTX_PBR;
+        shaderBindingTable = &shaderBindingTables.RTX_PBR;
+    }
+    else
+    {
+        pipeline = pipelines.RTX;
+        shaderBindingTable = &shaderBindingTables.RTX;
+    }
 
     vkCmdBindPipeline(drawCmdBuffers[swapChainImageIndex],
         VK_PIPELINE_BIND_POINT_RAY_TRACING_NV, pipeline);
@@ -1340,9 +1375,9 @@ void CG::EngineImpl::DrawRayTracingData(uint32_t swapChainImageIndex)
     VkDeviceSize bindingStride = rayTracingProperties.shaderGroupHandleSize;
 
     vkCmdTraceRaysNV(drawCmdBuffers[swapChainImageIndex],
-        shaderBindingTable.buffer, bindingOffsetRayGenShader,
-        shaderBindingTable.buffer, bindingOffsetMissShader,
-        bindingStride, shaderBindingTable.buffer,
+        shaderBindingTable->buffer, bindingOffsetRayGenShader,
+        shaderBindingTable->buffer, bindingOffsetMissShader,
+        bindingStride, shaderBindingTable->buffer,
         bindingOffsetHitShader, bindingStride, VK_NULL_HANDLE, 0, 0,
         engineConfig.width, engineConfig.height, 1);
 
