@@ -5,7 +5,7 @@
 struct RayPayload
 {
 	vec3 color;
-	vec3 scatterDirection;
+	vec3 throughput;
     uint bouncesCount;
 	uint randomSeed;
     uint envHit;
@@ -104,6 +104,8 @@ void main()
      
     for (uint s = 0; s < camera.numberOfSamples; ++s)
     {
+        rayPayload.throughput = vec3(1.0);
+    
         const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + RandomFloat(rayPayload.randomSeed);
         const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeNV.xy);
         vec2 d = inUV * 2.0 - 1.0;

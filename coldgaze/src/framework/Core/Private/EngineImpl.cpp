@@ -311,14 +311,12 @@ void CG::EngineImpl::PrepareUniformBuffers()
 
 void CG::EngineImpl::UpdateUniformBuffers()
 {
-
     glm::vec3 rotation = glm::vec3(75.0f, 40.0f, 0.0f);
 
     sceneUboData.globalLightDir = glm::vec4(
         sin(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)),
         sin(glm::radians(rotation.y)),
         cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)), 0.0f);
-
 
     sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 1.0f;
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;

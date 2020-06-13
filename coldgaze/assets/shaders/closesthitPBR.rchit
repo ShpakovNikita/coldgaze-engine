@@ -5,7 +5,7 @@
 struct RayPayload
 {
 	vec3 color;
-	vec3 scatterDirection;
+	vec3 throughput;
     uint bouncesCount;
 	uint randomSeed;
     uint envHit;
@@ -51,6 +51,11 @@ struct PBRParams {
 	vec3 emissive;                // emissive color value
 	vec3 worldPos;                // point on surface world position
     vec3 F0;                      // F0 param for Fresnel function
+    vec3 V;                       // View vector
+    vec3 N;                       // Normal vector
+    vec3 H;                       // Half vector
+    vec3 L;                       // Liight vector
+    float sw;                     // Specular weight determine, how we are going to launch ray
 };
 
 layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
@@ -105,7 +110,85 @@ const float PBR_WORKFLOW_SPECULAR_GLOSINESS = 1.0;
 const float c_MinRoughness = 0.04;
 
 const float DIELECTRIC_REFLECTION_APPROXIMATION = 0.04;
+const float MIN_TERMINATION_THRESHOLD = 0.05;
 const float PI = 3.14159265359;
+
+const float RAY_MIN = 0.001;
+const float RAY_MAX = 10000.0;
+
+// Needed for specular weight, https://github.com/Nadrin/Quartz/blob/master/src/raytrace/renderers/vulkan/shaders/lib/common.glsl
+float Luminance(vec3 color)
+{
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+float GetSpecularWeight(vec3 baseColor, vec3 F0, float metallic)
+{
+    const float diffuseLum = mix(Luminance(baseColor), 0, metallic);
+    const float specularLum = Luminance(F0);
+    return min(1, specularLum / (specularLum + diffuseLum));
+}
+
+bool IsBlack(vec3 color)
+{
+    return dot(color, color) < EPSILON;
+}
+
+uint RandomInt(inout uint seed)
+{
+	// LCG values from Numerical Recipes
+    return (seed = 1664525 * seed + 1013904223);
+}
+
+float RandomFloat(inout uint seed)
+{
+	// Float version using bitmask from Numerical Recipes
+	const uint one = 0x3f800000;
+	const uint msk = 0x007fffff;
+	return uintBitsToFloat(one | (msk & (RandomInt(seed) >> 9))) - 1;
+}
+
+vec2 RandomInUnitDisk(inout uint seed)
+{
+	for (;;)
+	{
+		const vec2 p = 2 * vec2(RandomFloat(seed), RandomFloat(seed)) - 1;
+		if (dot(p, p) < 1)
+		{
+			return p;
+		}
+	}
+}
+
+vec3 RandomInUnitSphere(inout uint seed)
+{
+	for (;;)
+	{
+		const vec3 p = 2 * vec3(RandomFloat(seed), RandomFloat(seed), RandomFloat(seed)) - 1;
+		if (dot(p, p) < 1)
+		{
+			return p;
+		}
+	}
+}
+
+vec2 SampleDisk(vec2 u)
+{
+    float r = sqrt(u.x);
+    float theta = 2 * PI * u.y;
+    return r * vec2(cos(theta), sin(theta));
+}
+
+vec3 SampleHemisphereCosine(vec2 u)
+{
+    vec2 d = SampleDisk(u);
+    return vec3(d.x, d.y, sqrt(1.0 - d.x * d.x - d.y * d.y));
+}
+
+float PdfHemisphereCosine(float cosTheta)
+{
+    return cosTheta / PI;
+}
 
 // Approximation of microfacets towards half-vector using Normal Distribution
 float NDF_GGXTR(PBRParams pbrParams)
@@ -148,6 +231,40 @@ vec3 F_Schlick(PBRParams pbrParams)
     return pbrParams.F0 + (1.0 - pbrParams.F0) * pow(1.0 - pbrParams.VdotH, 5.0);
 }
 
+vec3 SampleD_GGX(vec2 u, float alpha2)
+{
+    float phi    = 2 * PI * u.x;
+    float cos_wh = sqrt((1.0 - u.y) / (1.0 + (alpha2 - 1.0) * u.y));
+    float sin_wh = sqrt(1.0 - cos_wh * cos_wh);
+    return vec3(
+        sin_wh * cos(phi),
+        sin_wh * sin(phi),
+        cos_wh
+    );
+}
+
+float PDF_D_GGX(float roughness, float cosTheta)
+{
+    return G_SchlickGGX(cosTheta, roughness) * cosTheta;
+}
+
+
+float PDF_BSDF(PBRParams pbrParams)
+{
+    float pdfDiffuse = PdfHemisphereCosine(pbrParams.NdotL);
+    float pdfSpecular = PDF_D_GGX(pbrParams.roughness, pbrParams.NdotH) / max(EPSILON, 4.0 * pbrParams.LdotH);
+    return mix(pdfDiffuse, pdfSpecular, pbrParams.sw);
+}
+
+void InitPBRParams(inout PBRParams pbrParams, vec3 N, vec3 V, vec3 L, vec3 H)
+{
+    pbrParams.NdotL = clamp(dot(N, L), 0.001, 1.0);
+    pbrParams.NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
+    pbrParams.NdotH = clamp(dot(N, H), 0.001, 1.0);
+    pbrParams.LdotH = clamp(dot(L, H), 0.001, 1.0);
+    pbrParams.VdotH = clamp(dot(V, H), 0.001, 1.0);
+}
+
 vec3 EvaluateBSDF(VertexData vertexData, PBRParams pbrParams)
 {
     // Cook-Torrance BRDF
@@ -163,6 +280,25 @@ vec3 EvaluateBSDF(VertexData vertexData, PBRParams pbrParams)
     vec3 diffuse = kD * pbrParams.albedo.rgb / PI;
     
     return specular + diffuse;
+}
+
+vec3 SampleBSDF(VertexData vertexData, inout PBRParams pbrParams, out float pdf)
+{
+    vec3 unit = RandomInUnitSphere(rayPayload.randomSeed);
+
+    if(unit.z < pbrParams.sw) {
+        pbrParams.H = SampleD_GGX(unit.xy, pbrParams.alphaRoughness * pbrParams.alphaRoughness);
+        pbrParams.L = -reflect(pbrParams.V, pbrParams.H);
+    }
+    else {
+        pbrParams.L = SampleHemisphereCosine(unit.xy);
+        pbrParams.H = normalize(pbrParams.L + pbrParams.V);
+    }
+
+    InitPBRParams(pbrParams, pbrParams.N, pbrParams.V, pbrParams.L, pbrParams.H);
+    
+    pdf = PDF_BSDF(pbrParams);
+    return EvaluateBSDF(vertexData, pbrParams);
 }
 
 vec2 dFdy(vec2 p)
@@ -288,6 +424,8 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
     
     vec3 F0 = mix(vec3(DIELECTRIC_REFLECTION_APPROXIMATION), albedo.rgb, metallic);
     
+    float sw = GetSpecularWeight(albedo.rgb, F0, metallic);
+    
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
     float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
     float NdotH = clamp(dot(N, H), 0.0, 1.0);
@@ -307,7 +445,12 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
         albedo,
         emissive,
         worldPos,
-        F0
+        F0,
+        V,
+        N,
+        H,
+        L,
+        sw
     );
     
     return pbrParams;
@@ -317,12 +460,11 @@ vec3 GetDirectLighting(PBRParams pbrParams, VertexData vertexData)
 {
     uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
     uint cullMask = 0xff;
-    float tmin = 0.001;
-    float tmax = 10000.0;
+
     
     direct.envHit = 0;
     
-    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, pbrParams.worldPos, tmin, uboScene.globalLightDir.xyz, tmax, 2);
+    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, pbrParams.worldPos, RAY_MIN, uboScene.globalLightDir.xyz, RAY_MAX, 2);
     
     if (direct.envHit > 0)
     {
@@ -342,9 +484,49 @@ vec3 GetEnviromentLighting(PBRParams pbrParams, VertexData vertexData)
     return vec3(0.0);
 }
 
+float Maxcomp(vec3 comps)
+{
+    return max(comps.x, max(comps.y, comps.z));
+}
+
 vec3 GetIndirectLighting(PBRParams pbrParams, VertexData vertexData, uint minDepth)
 {
-    return vec3(0.0);
+    float pdf;
+    vec3 bsdf = SampleBSDF(vertexData, pbrParams, pdf);
+
+    if (IsBlack(bsdf) || pdf < EPSILON)
+    {
+        return vec3(0.0);
+    }
+    
+    vec3 pathThroughput = rayPayload.throughput * (bsdf * pbrParams.NdotL) / pdf;
+    
+    if(rayPayload.bouncesCount > minDepth) {
+        float terminationThreshold = max(MIN_TERMINATION_THRESHOLD, 1.0 - Maxcomp(pathThroughput));
+        if(RandomFloat(rayPayload.randomSeed) < terminationThreshold) {
+            return vec3(0.0);
+        }
+        pathThroughput /= 1.0 - terminationThreshold;
+    }
+    
+    rayPayload.bouncesCount = rayPayload.bouncesCount + 1;
+    rayPayload.throughput = pathThroughput;
+    
+    indirect.throughput = rayPayload.throughput;
+    indirect.randomSeed = rayPayload.randomSeed;
+    indirect.bouncesCount = rayPayload.bouncesCount;
+    
+    traceNV(topLevelAS, 
+        gl_RayFlagsOpaqueNV,
+        0xFF,
+        0, 0, 0,
+        pbrParams.worldPos,
+        RAY_MIN,
+        pbrParams.L,
+        RAY_MAX,
+        1);
+    
+    return indirect.color;
 }
 
 void main()

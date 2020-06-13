@@ -6,7 +6,7 @@ layout (set = 2, binding = 0) uniform sampler2D equirectangularMap;
 struct RayPayload
 {
 	vec3 color;
-	vec3 scatterDirection;
+	vec3 throughput;
     uint bouncesCount;
 	uint randomSeed;
     uint envHit;
