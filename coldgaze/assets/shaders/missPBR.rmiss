@@ -6,6 +6,10 @@ layout (set = 2, binding = 0) uniform sampler2D equirectangularMap;
 struct RayPayload
 {
 	vec3 color;
+	vec3 scatterDirection;
+    uint bouncesCount;
+	uint randomSeed;
+    uint envHit;
 };
 
 layout(location = 0) rayPayloadInNV RayPayload rayPayload;
@@ -25,4 +29,5 @@ void main()
     vec3 color = texture(equirectangularMap, uv).rgb;
     
     rayPayload.color = texture(equirectangularMap, uv).rgb;
+    rayPayload.envHit = 1;
 }

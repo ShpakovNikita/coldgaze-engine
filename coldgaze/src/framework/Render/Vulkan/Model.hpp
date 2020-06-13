@@ -72,21 +72,21 @@ namespace Vk {
 
         struct Material {
             struct MaterialParams {
-                glm::vec4 baseColorFactor;
-                glm::vec4 emissiveFactor;
-                glm::vec4 diffuseFactor;
-                glm::vec4 specularFactor;
-                float workflow;
-                int colorTextureSet;
-                int physicalDescriptorTextureSet;
-                int normalTextureSet;
-                int occlusionTextureSet;
-                int emissiveTextureSet;
-                float metallicFactor;
-                float roughnessFactor;
-                float alphaMask;
-                float alphaMaskCutoff;
-            };
+                glm::vec4 baseColorFactor = glm::vec4(1.0f);
+                glm::vec4 emissiveFactor = glm::vec4(0.0f);
+                glm::vec4 diffuseFactor = glm::vec4(1.0f);
+                glm::vec4 specularFactor = glm::vec4(1.0f);
+                float workflow = 0.0f;
+                int colorTextureSet = -1;
+                int physicalDescriptorTextureSet = -1;
+                int normalTextureSet = -1;
+                int occlusionTextureSet = -1;
+                int emissiveTextureSet = -1;
+                float metallicFactor = 0.0f;
+                float roughnessFactor = 0.0f;
+                float alphaMask = 1.0f;
+                float alphaMaskCutoff = 1.0f;
+            } materialParamsData = {};
             Buffer materialParams;
 
             enum class eAlphaMode {
@@ -100,7 +100,7 @@ namespace Vk {
             float metallicFactor = 1.0f;
             float roughnessFactor = 1.0f;
             glm::vec4 baseColorFactor = glm::vec4(1.0f);
-            glm::vec4 emissiveFactor = glm::vec4(1.0f);
+            glm::vec4 emissiveFactor = glm::vec4(0.0f);
             Texture* baseColorTexture = nullptr;
             Texture* metallicRoughnessTexture = nullptr;
             Texture* normalTexture = nullptr;
@@ -121,6 +121,8 @@ namespace Vk {
                 bool specularGlossiness = false;
             } pbrWorkflows;
             VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+
+            void BuildBuffers(CG::Vk::Device* vkDevice, VkQueue queue);
         };
 
         // A primitive contains the data for a single draw call

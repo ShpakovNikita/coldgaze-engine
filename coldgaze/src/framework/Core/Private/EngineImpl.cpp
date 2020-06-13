@@ -100,9 +100,10 @@ void CG::EngineImpl::Prepare()
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice,
         queue);
     LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
-    LoadModelAsync(
+    /*LoadModelAsync(
         "D:/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/"
-        "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
+        "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");*/
+    LoadModelAsync("D:/Strv_74_GLTF/PBR_test.gltf");
 
     CreateShaderBindingTable(shaderBindingTables.RTX, pipelines.RTX);
     CreateShaderBindingTable(shaderBindingTables.previewRTX, pipelines.previewRTX);
@@ -318,7 +319,8 @@ void CG::EngineImpl::UpdateUniformBuffers()
         sin(glm::radians(rotation.y)),
         cos(glm::radians(rotation.x)) * cos(glm::radians(rotation.y)), 0.0f);
 
-    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 3.0f;
+
+    sceneUboData.globalLightColor = glm::vec4({ 1.0f, 1.0f, 1.0f, 1.0f }) * 1.0f;
     sceneUboData.projection = cameraComponent->uboVS.projectionMatrix;
     sceneUboData.view = cameraComponent->uboVS.viewMatrix;
 
@@ -388,12 +390,20 @@ void CG::EngineImpl::DrawUI()
         {
             bool pauseRendering = static_cast<bool>(cameraUboData.pauseRendering);
 
+            const auto oldPipelineParams = std::tie(uiData.enablePreviewQuality, uiData.enablePBRMaterials);
+
             ImGui::Text("Renderer settings");
             ImGui::Checkbox("Enable preview quality", &uiData.enablePreviewQuality);
             ImGui::Checkbox("Enable PBR materials", &uiData.enablePBRMaterials);
             ImGui::Checkbox("Pause rendering", &pauseRendering);
             ImGui::SliderInt("Bounces count", &cameraUboData.bouncesCount, 1, 64);
             ImGui::SliderInt("Number of samples", &cameraUboData.numberOfSamples, 1, 64);
+
+            const auto newPipelineParams = std::tie(uiData.enablePreviewQuality, uiData.enablePBRMaterials);
+            if (oldPipelineParams != newPipelineParams)
+            {
+                cameraComponent->ResetSamples();
+            }
 
             cameraUboData.pauseRendering = static_cast<int>(pauseRendering);
         }
@@ -497,6 +507,7 @@ void CG::EngineImpl::LoadModelAsync(const std::string& modelFilePath)
 {
     try {
         if (testScene) {
+            cameraComponent->ResetSamples();
             DestroyNVRayTracingGeometry();
             DestroyRTXPipeline();
             // SetupRTXEnviromentDescriptorSet();
@@ -1117,7 +1128,7 @@ void CG::EngineImpl::SetupRTXModelDescriptorSets()
     {
         std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings({
             { 0, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV, 1,
-                VK_SHADER_STAGE_RAYGEN_BIT_NV },
+                VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV},
             { 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_NV },
             { 2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                 VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV },
@@ -1125,6 +1136,7 @@ void CG::EngineImpl::SetupRTXModelDescriptorSets()
             { 4, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
                 VK_SHADER_STAGE_RAYGEN_BIT_NV | VK_SHADER_STAGE_CLOSEST_HIT_BIT_NV },
         });
+
 
         VkDescriptorSetLayoutCreateInfo layoutInfo {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

@@ -5,6 +5,10 @@
 struct RayPayload
 {
 	vec3 color;
+	vec3 scatterDirection;
+    uint bouncesCount;
+	uint randomSeed;
+    uint envHit;
 };
 
 struct VertexData
@@ -43,13 +47,13 @@ struct PBRParams {
 	float roughness;              // roughness value at the surface
 	float metallic;               // metallic value at the surface
 	float alphaRoughness;         // roughness * roughness
-	vec3 diffuseColor;            // color contribution from diffuse lighting
-	vec3 specularColor;           // color contribution from specular lighting
 	vec4 albedo;                  // base albedo color value
+	vec3 emissive;                // emissive color value
 	vec3 worldPos;                // point on surface world position
-    vec3 N;                       // World normal
+    vec3 F0;                      // F0 param for Fresnel function
 };
 
+layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
 layout(binding = 2, set = 0) uniform UBOScene
 {
 	mat4 projection;
@@ -64,6 +68,18 @@ layout(binding = 2, set = 0) uniform UBOScene
     vec4 globalLightColor;
 } uboScene;
 
+layout(binding = 4, set = 0) uniform Camera
+{
+    uint bouncesCount;
+    uint numberOfSamples;
+    float aperture;
+    float focusDistance;
+    uint pauseRendering;
+    uint accumulationIndex;
+    uint randomSeed;
+} camera;
+
+
 layout(binding = 0, set = 1) readonly buffer VertexBuffers { VertexData vertices[]; } vertexBuffers[];
 layout(binding = 1, set = 1) readonly buffer IndexBuffers { uint indices[]; } indexBuffers[];
 layout(binding = 2, set = 1) uniform MaterialBuffers { Material material; } materialBuffers[];
@@ -76,7 +92,12 @@ layout(binding = 7, set = 1) uniform sampler2D emissiveTextures[];
 layout(binding = 0, set = 2) uniform sampler2D equirectangularMap;
 
 layout(location = 0) rayPayloadInNV RayPayload rayPayload;
+layout(location = 1) rayPayloadNV RayPayload indirect;
+layout(location = 2) rayPayloadNV RayPayload direct;
+
 hitAttributeNV vec3 attribs;
+
+const float EPSILON = 0.001;
 
 const float PBR_WORKFLOW_METALLIC_ROUGHNESS = 0.0;
 const float PBR_WORKFLOW_SPECULAR_GLOSINESS = 1.0;
@@ -124,27 +145,24 @@ float G_Smith(PBRParams pbrParams)
 // Fresnel function
 vec3 F_Schlick(PBRParams pbrParams)
 {
-    return pbrParams.specularColor + (1.0 - pbrParams.specularColor) * pow(clamp(1.0 - pbrParams.VdotH, 0.0, 1.0), 5.0);
+    return pbrParams.F0 + (1.0 - pbrParams.F0) * pow(1.0 - pbrParams.VdotH, 5.0);
 }
 
-// Result reflection
-vec3 BRDF_CookTorrance(vec3 lightColor, VertexData vertexData, PBRParams pbrParams)
+vec3 EvaluateBSDF(VertexData vertexData, PBRParams pbrParams)
 {
     // Cook-Torrance BRDF
     float NDF = NDF_GGXTR(pbrParams);        
     float G = G_Smith(pbrParams);      
     vec3 F = F_Schlick(pbrParams);
     
-    vec3 num = NDF * G * F;
-    float denom = 4.0 * pbrParams.NdotV * pbrParams.NdotL;
-    vec3 specularContrib = num / max(denom, 0.001);  
-    
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
-      
     kD *= 1.0 - pbrParams.metallic;	 
     
-    return (kD * pbrParams.albedo.rgb / PI + specularContrib) * lightColor * pbrParams.NdotL;
+    vec3 specular = NDF * G * F;
+    vec3 diffuse = kD * pbrParams.albedo.rgb / PI;
+    
+    return specular + diffuse;
 }
 
 vec2 dFdy(vec2 p)
@@ -231,11 +249,19 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
     vec4 albedo;
     if (material.baseColorTextureSet > -1) {
         albedo = texture(baseColorTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], 
-            material.baseColorTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw);
+            material.baseColorTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw) * material.baseColorFactor;
     } else {
-        albedo = vec4(1.0); // material.baseColorFactor;
+        albedo = material.baseColorFactor;
     }
 
+    vec3 emissive;
+    if (material.emissiveTextureSet > -1) {
+        emissive = texture(emissiveTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], 
+            material.emissiveTextureSet == 0 ? vertexData.inUV.xy :  vertexData.inUV.zw).rgb * material.emissiveFactor.rgb;
+    } else {
+        emissive = material.emissiveFactor.rgb;
+    }
+    
     vec3 worldPos = gl_WorldRayOriginNV + gl_HitTNV * gl_WorldRayDirectionNV;
     
     vec3 N = perturbNormal(vertexData, material, worldPos);
@@ -260,11 +286,7 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
         occlusion = texture(ambientOcclusionTextures[nonuniformEXT(gl_InstanceCustomIndexNV)], (material.occlusionTextureSet == 0 ? vertexData.inUV.xy : vertexData.inUV.zw)).r;
     }
     
-    vec3 F0 = vec3(0.04); 
-    vec3 specularColor = mix(F0, albedo.rgb, metallic);
-    
-    vec3 diffuseColor = albedo.rgb * (vec3(1.0) - F0);
-    diffuseColor *= 1.0 - metallic;
+    vec3 F0 = mix(vec3(DIELECTRIC_REFLECTION_APPROXIMATION), albedo.rgb, metallic);
     
     float NdotL = clamp(dot(N, L), 0.001, 1.0);
     float NdotV = clamp(abs(dot(N, V)), 0.001, 1.0);
@@ -282,14 +304,47 @@ PBRParams GetPBRParams(VertexData vertexData, Material material)
         roughness,
         metallic,
         roughness * roughness,
-        diffuseColor,
-        specularColor,
         albedo,
+        emissive,
         worldPos,
-        N
+        F0
     );
     
     return pbrParams;
+}
+
+vec3 GetDirectLighting(PBRParams pbrParams, VertexData vertexData)
+{
+    uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
+    uint cullMask = 0xff;
+    float tmin = 0.001;
+    float tmax = 10000.0;
+    
+    direct.envHit = 0;
+    
+    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, pbrParams.worldPos, tmin, uboScene.globalLightDir.xyz, tmax, 2);
+    
+    if (direct.envHit > 0)
+    {
+        const vec3 bsdf = EvaluateBSDF(vertexData, pbrParams);
+    
+        return uboScene.globalLightColor.rgb * bsdf * pbrParams.NdotL;
+    }
+    else
+    {
+        return vec3(0.0, 0.0, 0.0);
+    }
+    
+}
+
+vec3 GetEnviromentLighting(PBRParams pbrParams, VertexData vertexData)
+{
+    return vec3(0.0);
+}
+
+vec3 GetIndirectLighting(PBRParams pbrParams, VertexData vertexData, uint minDepth)
+{
+    return vec3(0.0);
 }
 
 void main()
@@ -305,14 +360,20 @@ void main()
     
     if (material.workflow == PBR_WORKFLOW_METALLIC_ROUGHNESS)
     {
+        // TODO: move to uniforms
+        const float enviromentFactor = 1.0f;
+    
         PBRParams pbrParams = GetPBRParams(vertexData, material);
         
-        vec3 radiance = vec3(0.0);
-        radiance += BRDF_CookTorrance(uboScene.globalLightColor.rgb, vertexData, pbrParams);
-  
-        vec3 ambient = vec3(0.04) * pbrParams.albedo.rgb * pbrParams.occlusion; 
+        rayPayload.color  = (rayPayload.bouncesCount == 0) ? pbrParams.emissive.rgb : vec3(0.0);
+        rayPayload.color += GetDirectLighting(pbrParams, vertexData);
+        rayPayload.color += GetEnviromentLighting(pbrParams, vertexData) * enviromentFactor;
         
-        rayPayload.color = ambient + radiance;
+        // Produce bounce
+        if (rayPayload.bouncesCount < camera.bouncesCount)
+        {
+            rayPayload.color += GetIndirectLighting(pbrParams, vertexData, 1);   
+        }
     }
     else
     {

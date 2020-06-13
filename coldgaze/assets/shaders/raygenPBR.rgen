@@ -1,9 +1,14 @@
 #version 460
+#extension GL_EXT_control_flow_attributes : require
 #extension GL_NV_ray_tracing : require
 
 struct RayPayload
 {
 	vec3 color;
+	vec3 scatterDirection;
+    uint bouncesCount;
+	uint randomSeed;
+    uint envHit;
 };
 
 layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
@@ -21,53 +26,109 @@ layout(binding = 2, set = 0) uniform UBOScene
     vec4 globalLightDir;
     vec4 globalLightColor;
 } uboScene;
+layout(binding = 3, set = 0, rgba8) uniform image2D accumulationImage;
+layout(binding = 4, set = 0) uniform Camera
+{
+    uint bouncesCount;
+    uint numberOfSamples;
+    float aperture;
+    float focusDistance;
+    uint pauseRendering;
+    uint accumulationIndex;
+    uint randomSeed;
+} camera;
 
 layout(location = 0) rayPayloadNV RayPayload rayPayload;
 
-const uint bouncesCount = 5;
-
-vec3 Uncharted2Tonemap(vec3 color)
+uint InitRandomSeed(uint val0, uint val1)
 {
-	float A = 0.15;
-	float B = 0.50;
-	float C = 0.10;
-	float D = 0.20;
-	float E = 0.02;
-	float F = 0.30;
-	float W = 11.2;
-	return ((color*(A*color+C*B)+D*E)/(color*(A*color+B)+D*F))-E/F;
+	uint v0 = val0, v1 = val1, s0 = 0;
+
+	[[unroll]] 
+	for (uint n = 0; n < 16; n++)
+	{
+		s0 += 0x9e3779b9;
+		v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
+		v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
+	}
+
+	return v0;
 }
 
-vec4 Tonemap(vec4 color)
+uint RandomInt(inout uint seed)
 {
-    // TODO: move to uniforms 
-    float gamma = 2.2f;
-    float exposure = 4.5f;
+	// LCG values from Numerical Recipes
+    return (seed = 1664525 * seed + 1013904223);
+}
 
-	vec3 outcol = Uncharted2Tonemap(color.rgb * exposure);
-	outcol = outcol * (1.0f / Uncharted2Tonemap(vec3(11.2f)));	
-	return vec4(pow(outcol, vec3(1.0f / gamma)), color.a);
+float RandomFloat(inout uint seed)
+{
+	// Float version using bitmask from Numerical Recipes
+	const uint one = 0x3f800000;
+	const uint msk = 0x007fffff;
+	return uintBitsToFloat(one | (msk & (RandomInt(seed) >> 9))) - 1;
+}
+
+vec2 RandomInUnitDisk(inout uint seed)
+{
+	for (;;)
+	{
+		const vec2 p = 2 * vec2(RandomFloat(seed), RandomFloat(seed)) - 1;
+		if (dot(p, p) < 1)
+		{
+			return p;
+		}
+	}
+}
+
+vec3 ToneMapping(vec3 linear)
+{
+    linear = max(vec3(0), linear - vec3(0.004));
+    const vec3 srgb = (linear * (6.2 * linear + 0.5)) / (linear * (6.2 * linear + 1.7) + 0.06);
+    return srgb;
 }
 
 void main() 
 {
-    const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + vec2(0.5);
-    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeNV.xy);
-    vec2 d = inUV * 2.0 - 1.0;
-
-    vec4 origin = uboScene.invView * vec4(0,0,0,1);
-    vec4 target = uboScene.invProjection * vec4(d.x, d.y, 1, 1);
-    vec4 direction = uboScene.invView * vec4(normalize(target.xyz), 0);
-    
-    uint rayFlags = gl_RayFlagsOpaqueNV;
-    uint cullMask = 0xff;
-    float tmin = 0.001;
-    float tmax = 10000.0;
-
-    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
-    
-    vec3 resultColor = Tonemap(vec4(rayPayload.color, 0.0)).rgb;
-    
+    rayPayload.randomSeed = InitRandomSeed(InitRandomSeed(gl_LaunchIDNV.x, gl_LaunchIDNV.y), camera.randomSeed);
     ivec2 storePos = ivec2(gl_LaunchIDNV.x, gl_LaunchSizeNV.y - gl_LaunchIDNV.y);
-	imageStore(image, storePos, vec4(resultColor, 0.0));
+
+    vec3 accumulationColor = imageLoad(accumulationImage, storePos).rgb;
+    
+    vec3 resultColor = vec3(0.0);
+    if (camera.pauseRendering > 0)
+    {
+        imageStore(image, storePos, vec4(accumulationColor, 1.0));
+        return;
+    }
+     
+    for (uint s = 0; s < camera.numberOfSamples; ++s)
+    {
+        const vec2 pixelCenter = vec2(gl_LaunchIDNV.xy) + RandomFloat(rayPayload.randomSeed);
+        const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeNV.xy);
+        vec2 d = inUV * 2.0 - 1.0;
+
+        vec2 offset = camera.aperture / 2 * RandomInUnitDisk(rayPayload.randomSeed);
+        vec4 origin = uboScene.invView * vec4(offset, 0, 1);
+        vec4 target = uboScene.invProjection * vec4(d.x, d.y, 1, 1);
+        vec4 direction = uboScene.invView * vec4(normalize(target.xyz * camera.focusDistance - vec3(offset, 0.0)), 0);
+        
+        uint rayFlags = gl_RayFlagsOpaqueNV;
+        uint cullMask = 0xff;
+        float tmin = 0.001;
+        float tmax = 10000.0;
+        
+        rayPayload.bouncesCount = 0;
+        
+        traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+        
+        resultColor += rayPayload.color;
+    }
+    
+    resultColor /= camera.numberOfSamples;
+    resultColor = ToneMapping(resultColor);
+    resultColor = (resultColor + camera.accumulationIndex * accumulationColor) / (camera.accumulationIndex + 1);
+    
+    imageStore(accumulationImage, storePos, vec4(resultColor, 1.0));
+	imageStore(image, storePos, vec4(resultColor, 1.0));
 }

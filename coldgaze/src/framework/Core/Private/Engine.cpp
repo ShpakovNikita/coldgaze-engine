@@ -22,11 +22,17 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include "stb_image.h"
 
-const std::vector<const char*> validationLayers = {
-    "VK_LAYER_LUNARG_standard_validation",
-    "VK_LAYER_KHRONOS_validation",
-};
+namespace SEngine
+{
+    const std::vector<const char*> kValidationLayers = {
+        "VK_LAYER_LUNARG_standard_validation",
+        "VK_LAYER_KHRONOS_validation",
+    };
+    const std::string kFaviconPath = "textures/Vulkan.png";
+
+}
 
 CG::Engine::Engine(CG::EngineConfig& aEngineConfig)
     : engineConfig(aEngineConfig)
@@ -265,6 +271,15 @@ bool CG::Engine::InitWindow()
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         engineConfig.width, engineConfig.height,
         SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+
+    int imageWidth, imageHeight, nrComponents, channels = 4;
+    uint8_t* faviconData = stbi_load((GetAssetPath() + SEngine::kFaviconPath).c_str(), &imageWidth, &imageHeight, &nrComponents, 0);
+    SDL_Surface* faviconSurface = SDL_CreateRGBSurfaceFrom(faviconData, imageWidth, imageHeight, 8 * channels, imageWidth * channels, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
+
+    SDL_SetWindowIcon(window, faviconSurface);
+
+    SDL_FreeSurface(faviconSurface);
+    stbi_image_free(faviconData);
 
     return window != nullptr;
 }
@@ -643,7 +658,7 @@ bool CG::Engine::CreateVkInstance()
 
 #if ENABLE_VULKAN_VALIDATION
     extensionNames.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
-    layerNames = validationLayers;
+    layerNames = SEngine::kValidationLayers;
 #endif
 
     for (auto enabledExtension : enabledInstanceExtensions) {
@@ -682,7 +697,7 @@ bool CG::Engine::CheckValidationLayersSupport()
     std::vector<VkLayerProperties> availableLayers(layerCount);
     vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-    for (const char* layerName : validationLayers) {
+    for (const char* layerName : SEngine::kValidationLayers) {
         bool layerFound = false;
 
         for (const auto& layerProperties : availableLayers) {

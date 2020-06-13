@@ -321,43 +321,16 @@ void CG::Vk::GLTFModel::LoadMaterials(const tinygltf::Model& input)
         materialParams.metallicFactor = material->metallicFactor;
         materialParams.roughnessFactor = material->roughnessFactor;
         materialParams.alphaMaskCutoff = material->alphaCutoff;
+        material->materialParamsData = materialParams;
 
-        size_t materialBufferSize = sizeof(Material::MaterialParams);
-
-        // We are creating this buffers to copy them on local memory for better performance
-        Buffer materialStaging;
-
-        VK_CHECK_RESULT(vkDevice->CreateBuffer(
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            &materialStaging,
-            materialBufferSize,
-            &materialParams));
-
-        VK_CHECK_RESULT(vkDevice->CreateBuffer(
-            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            &material->materialParams,
-            materialBufferSize));
-
-        VkCommandBuffer copyCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
-        VkBufferCopy copyRegion = {};
-
-        copyRegion.size = materialBufferSize;
-        vkCmdCopyBuffer(
-            copyCmd,
-            materialStaging.buffer,
-            material->materialParams.buffer,
-            1,
-            &copyRegion);
-
-        vkDevice->FlushCommandBuffer(copyCmd, queue, true);
-        materialStaging.Destroy();
+        material->BuildBuffers(vkDevice, queue);
 
         materials.push_back(std::move(material));
     }
     // Push a default material at the end of the list for meshes with no material assigned
-    materials.push_back(std::move(std::make_unique<Material>()));
+    auto defaultMaterial = std::make_unique<Material>();
+    defaultMaterial->BuildBuffers(vkDevice, queue);
+    materials.push_back(std::move(defaultMaterial));
 }
 
 void CG::Vk::GLTFModel::LoadAnimations(const tinygltf::Model& input)
@@ -881,4 +854,39 @@ CG::Vk::GLTFModel::AABBox CG::Vk::GLTFModel::AABBox::GetAABB(const glm::mat4& m)
     locaMax += glm::max(v0, v1);
 
     return AABBox(locMin, locaMax);
+}
+
+void CG::Vk::GLTFModel::Material::BuildBuffers(CG::Vk::Device* vkDevice, VkQueue queue)
+{
+    size_t materialBufferSize = sizeof(Material::MaterialParams);
+
+    // We are creating this buffers to copy them on local memory for better performance
+    Buffer materialStaging;
+
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &materialStaging,
+        materialBufferSize,
+        &materialParamsData));
+
+    VK_CHECK_RESULT(vkDevice->CreateBuffer(
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &materialParams,
+        materialBufferSize));
+
+    VkCommandBuffer copyCmd = vkDevice->CreateCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, true);
+    VkBufferCopy copyRegion = {};
+
+    copyRegion.size = materialBufferSize;
+    vkCmdCopyBuffer(
+        copyCmd,
+        materialStaging.buffer,
+        materialParams.buffer,
+        1,
+        &copyRegion);
+
+    vkDevice->FlushCommandBuffer(copyCmd, queue, true);
+    materialStaging.Destroy();
 }
