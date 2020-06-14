@@ -618,6 +618,7 @@ void CG::Engine::SubmitFrame()
         }
     }
 
+
     VK_CHECK_RESULT(vkQueueWaitIdle(queue));
 }
 

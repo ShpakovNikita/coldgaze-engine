@@ -35,6 +35,9 @@ constexpr uint32_t kIndexRaygen = 0;
 constexpr uint32_t kIndexMiss = 1;
 constexpr uint32_t kIndexClosestHit = 2;
 
+// TODO: remove hard coded recursion depth for GTX 1070
+constexpr uint32_t kMaxRecursionDepth = 9;
+
 CG::EngineImpl::EngineImpl(CG::EngineConfig& engineConfig)
     : CG::Engine(engineConfig)
 {
@@ -54,8 +57,6 @@ CG::EngineImpl::~EngineImpl() = default;
 
 void CG::EngineImpl::RenderFrame(float deltaTime)
 {
-    UpdateUniformBuffers();
-
     PrepareFrame();
 
     UpdateFrameData(deltaTime);
@@ -100,10 +101,9 @@ void CG::EngineImpl::Prepare()
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice,
         queue);
     LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
-    /*LoadModelAsync(
+    LoadModelAsync(
         "D:/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/"
-        "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");*/
-    LoadModelAsync("D:/Strv_74_GLTF/PBR_test.gltf");
+        "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
 
     CreateShaderBindingTable(shaderBindingTables.RTX, pipelines.RTX);
     CreateShaderBindingTable(shaderBindingTables.previewRTX, pipelines.previewRTX);
@@ -217,6 +217,7 @@ void CG::EngineImpl::BuildCommandBuffers()
     renderPassBeginInfo.pClearValues = clearValues.data();
 
     BuildUiCommandBuffers();
+    UpdateUniformBuffers();
 
     VkViewport viewport = {};
     viewport.height = static_cast<float>(engineConfig.height);
@@ -388,16 +389,16 @@ void CG::EngineImpl::DrawUI()
         {
             bool pauseRendering = static_cast<bool>(cameraUboData.pauseRendering);
 
-            const auto oldPipelineParams = std::tie(uiData.enablePreviewQuality, uiData.enablePBRMaterials);
+            const std::tuple<bool, bool> oldPipelineParams = std::tie(uiData.enablePreviewQuality, uiData.enablePBRMaterials);
 
             ImGui::Text("Renderer settings");
             ImGui::Checkbox("Enable preview quality", &uiData.enablePreviewQuality);
             ImGui::Checkbox("Enable PBR materials", &uiData.enablePBRMaterials);
             ImGui::Checkbox("Pause rendering", &pauseRendering);
-            ImGui::SliderInt("Bounces count", &cameraUboData.bouncesCount, 1, 64);
+            ImGui::SliderInt("Bounces count", &cameraUboData.bouncesCount, 1, kMaxRecursionDepth);
             ImGui::SliderInt("Number of samples", &cameraUboData.numberOfSamples, 1, 64);
 
-            const auto newPipelineParams = std::tie(uiData.enablePreviewQuality, uiData.enablePBRMaterials);
+            const std::tuple<bool, bool> newPipelineParams = std::tie(uiData.enablePreviewQuality, uiData.enablePBRMaterials);
             if (oldPipelineParams != newPipelineParams)
             {
                 cameraComponent->ResetSamples();
@@ -1056,13 +1057,14 @@ void CG::EngineImpl::CreateRTXPipeline()
     groups[kIndexClosestHit].generalShader = VK_SHADER_UNUSED_NV;
     groups[kIndexClosestHit].closestHitShader = shaderIndexClosestHit;
 
+
     VkRayTracingPipelineCreateInfoNV rayPipelineInfo {};
     rayPipelineInfo.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_NV;
     rayPipelineInfo.stageCount = static_cast<uint32_t>(rtxShaderStages.size());
     rayPipelineInfo.pStages = rtxShaderStages.data();
     rayPipelineInfo.groupCount = static_cast<uint32_t>(groups.size());
     rayPipelineInfo.pGroups = groups.data();
-    rayPipelineInfo.maxRecursionDepth = 1;
+    rayPipelineInfo.maxRecursionDepth = kMaxRecursionDepth;
     rayPipelineInfo.layout = pipelineLayouts.rtxPipelineLayout;
 
     VK_CHECK_RESULT(

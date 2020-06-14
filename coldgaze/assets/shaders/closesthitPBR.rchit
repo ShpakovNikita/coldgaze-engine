@@ -9,6 +9,9 @@ struct RayPayload
     uint bouncesCount;
 	uint randomSeed;
     uint envHit;
+    
+    // dirty hack
+    uint sampleEnviroment;
 };
 
 struct VertexData
@@ -479,6 +482,22 @@ vec3 GetDirectLighting(PBRParams pbrParams, VertexData vertexData)
     
 }
 
+vec3 GetReflections(PBRParams pbrParams)
+{
+    vec3 reflectance = reflect(-pbrParams.V, pbrParams.N) + pbrParams.roughness * RandomInUnitSphere(rayPayload.randomSeed);
+
+    indirect.randomSeed = rayPayload.randomSeed;
+    indirect.bouncesCount = rayPayload.bouncesCount + 1;
+    indirect.sampleEnviroment = 1;
+    
+    uint rayFlags = gl_RayFlagsOpaqueNV;
+    uint cullMask = 0xff;
+    
+    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, pbrParams.worldPos, RAY_MIN, reflectance, RAY_MAX, 1);
+    
+    return indirect.color * 0.1;
+}
+
 vec3 GetEnviromentLighting(PBRParams pbrParams, VertexData vertexData)
 {
     return vec3(0.0);
@@ -509,12 +528,10 @@ vec3 GetIndirectLighting(PBRParams pbrParams, VertexData vertexData, uint minDep
         pathThroughput /= 1.0 - terminationThreshold;
     }
     
-    rayPayload.bouncesCount = rayPayload.bouncesCount + 1;
-    rayPayload.throughput = pathThroughput;
-    
-    indirect.throughput = rayPayload.throughput;
+    indirect.throughput = pathThroughput;
     indirect.randomSeed = rayPayload.randomSeed;
-    indirect.bouncesCount = rayPayload.bouncesCount;
+    indirect.bouncesCount = rayPayload.bouncesCount + 1;
+    indirect.sampleEnviroment = 0;
     
     traceNV(topLevelAS, 
         gl_RayFlagsOpaqueNV,
@@ -522,7 +539,7 @@ vec3 GetIndirectLighting(PBRParams pbrParams, VertexData vertexData, uint minDep
         0, 0, 0,
         pbrParams.worldPos,
         RAY_MIN,
-        pbrParams.L,
+        -pbrParams.L,
         RAY_MAX,
         1);
     
@@ -555,6 +572,12 @@ void main()
         if (rayPayload.bouncesCount < camera.bouncesCount)
         {
             rayPayload.color += GetIndirectLighting(pbrParams, vertexData, 1);   
+        }        
+        
+        // Produce bounce
+        if (rayPayload.bouncesCount < camera.bouncesCount)
+        {
+            rayPayload.color += GetReflections(pbrParams);   
         }
     }
     else

@@ -10,6 +10,9 @@ struct RayPayload
     uint bouncesCount;
 	uint randomSeed;
     uint envHit;
+        
+    // dirty hack
+    uint sampleEnviroment;
 };
 
 layout(location = 0) rayPayloadInNV RayPayload rayPayload;
@@ -28,6 +31,14 @@ void main()
     vec2 uv = SampleSphericalMap(normalize(gl_WorldRayDirectionNV)); 
     vec3 color = texture(equirectangularMap, uv).rgb;
     
-    rayPayload.color = texture(equirectangularMap, uv).rgb;
+    if (rayPayload.sampleEnviroment > 0.0)
+    {
+        rayPayload.color = texture(equirectangularMap, uv).rgb;
+    }
+    else
+    {
+        rayPayload.color = vec3(0.0);
+    }
+    
     rayPayload.envHit = 1;
 }

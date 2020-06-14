@@ -9,6 +9,9 @@ struct RayPayload
     uint bouncesCount;
 	uint randomSeed;
     uint envHit;
+    
+    // dirty hack
+    uint sampleEnviroment;
 };
 
 layout(binding = 0, set = 0) uniform accelerationStructureNV topLevelAS;
@@ -121,6 +124,7 @@ void main()
         float tmax = 10000.0;
         
         rayPayload.bouncesCount = 0;
+        rayPayload.sampleEnviroment = 1;
         
         traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
         

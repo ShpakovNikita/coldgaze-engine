@@ -59,8 +59,8 @@ private:
     };
 
     struct CameraUboData {
-        int bouncesCount = 16;
-        int numberOfSamples = 16;
+        int bouncesCount = 2;
+        int numberOfSamples = 1;
         float aperture = 0.0f;
         float focusDistance = 13.0f;
         int pauseRendering = false;
