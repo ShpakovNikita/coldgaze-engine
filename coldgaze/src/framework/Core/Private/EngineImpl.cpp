@@ -414,8 +414,8 @@ void CG::EngineImpl::DrawUI()
 
             ImGui::SliderFloat("Camera FOV", &cameraComponent->fov, 10.0f, 135.0f);
 
-            ImGui::SliderFloat("Aperture", &cameraUboData.aperture, 0.0f, 1.0f);
-            ImGui::SliderFloat("Focus distance", &cameraUboData.focusDistance, 0.001f, 32.0f);
+            ImGui::SliderFloat("Aperture", &cameraUboData.aperture, 0.0f, 0.2f);
+            ImGui::SliderFloat("Focus distance", &cameraUboData.focusDistance, 0.001f, 12.0f);
         }
 
         if (std::tie(oldCameraUbo.aperture, oldCameraUbo.bouncesCount, oldCameraUbo.focusDistance, oldCameraUbo.numberOfSamples) != std::tie(cameraUboData.aperture, cameraUboData.bouncesCount, cameraUboData.focusDistance, cameraUboData.numberOfSamples)

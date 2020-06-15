@@ -464,10 +464,10 @@ vec3 GetDirectLighting(PBRParams pbrParams, VertexData vertexData)
     uint rayFlags = gl_RayFlagsOpaqueNV | gl_RayFlagsTerminateOnFirstHitNV | gl_RayFlagsSkipClosestHitShaderNV;
     uint cullMask = 0xff;
 
-    
+    const float DISPERSION_FACTOR = 0.08;
     direct.envHit = 0;
     
-    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, pbrParams.worldPos, RAY_MIN, uboScene.globalLightDir.xyz, RAY_MAX, 2);
+    traceNV(topLevelAS, rayFlags, cullMask, 0, 0, 0, pbrParams.worldPos, RAY_MIN, uboScene.globalLightDir.xyz + DISPERSION_FACTOR * RandomInUnitSphere(rayPayload.randomSeed), RAY_MAX, 2);
     
     if (direct.envHit > 0)
     {
@@ -574,6 +574,7 @@ void main()
             rayPayload.color += GetIndirectLighting(pbrParams, vertexData, 1);   
         }        
         
+        // TODO: remove this environmental reflections hack
         // Produce bounce
         if (rayPayload.bouncesCount < camera.bouncesCount)
         {
