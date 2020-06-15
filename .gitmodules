@@ -16,3 +16,9 @@
 [submodule "coldgaze/include/stb"]
 	path = coldgaze/include/stb
 	url = https://github.com/nothings/stb.git
+[submodule "coldgaze/include/SDL2"]
+	path = coldgaze/include/SDL2
+	url = git@github.com:ShpakovNikita/SDL2.git
+[submodule "coldgaze/include/vulkan"]
+	path = coldgaze/include/vulkan
+	url = git@github.com:ShpakovNikita/vulkan.git
