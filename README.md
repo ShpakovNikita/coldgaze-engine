@@ -1,7 +1,23 @@
 # Coldgaze
-PBR Graphics rendering engine
+PBR Graphics rendering engine with RTX support and Vulkan API backend.
 
-Plan:
-Vulkan support, Fix code style from PEP8 to Google
+# Features
+- [x] Basic PBR support
+- [x] RTX path tracing
+- [x] Camera lenses
+- [x] Indirect light path tracing
+- [ ] Enviroment light path tracing
 
-Work in progress
+# How to build?
+Below, you can find the build instructions. Don't forget to pull data from lfs and init submodules before build!
+```
+$ git submodule update --init --recursive
+$ git lfs install
+$ git lfs pull
+```
+
+#### Windows (Using VS generator)
+```
+$ CMake -G "Visual Studio 16 2019"
+```
+After that, run generated solution.
