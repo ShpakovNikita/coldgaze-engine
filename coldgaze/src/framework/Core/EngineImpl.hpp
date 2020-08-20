@@ -77,7 +77,7 @@ private:
         bool isActive = true;
         bool useSampleShading = false;
         bool enablePreviewQuality = false;
-        bool enablePBRMaterials = false;
+        bool enablePBRMaterials = true;
         CameraUboData cameraUboData = {};
     } uiData = {};
 
@@ -100,6 +100,7 @@ private:
         bool created = false;
         VkDescriptorSetLayout layout;
     };
+
 
     struct DescriptorSetLayouts {
         DescriptorSetLayout rtxRaygenLayout;

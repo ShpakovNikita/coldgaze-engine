@@ -100,10 +100,8 @@ void CG::EngineImpl::Prepare()
 
     emptyTexture.LoadFromFile(GetAssetPath() + "textures/FFFFFF-1.png", vkDevice,
         queue);
-    LoadSkybox(GetAssetPath() + "textures/hdr/Malibu_Overlook_3k.hdr");
-    LoadModelAsync(
-        "D:/glTF-Sample-Models-master/glTF-Sample-Models-master/2.0/"
-        "MetalRoughSpheres/glTF/MetalRoughSpheres.gltf");
+    LoadSkybox(GetAssetPath() + "textures/hdr/anniversary_lounge_4k_blur.hdr");
+    LoadModelAsync(GetAssetPath() + "models/MaterialBall/scene.gltf");
 
     CreateShaderBindingTable(shaderBindingTables.RTX, pipelines.RTX);
     CreateShaderBindingTable(shaderBindingTables.previewRTX, pipelines.previewRTX);

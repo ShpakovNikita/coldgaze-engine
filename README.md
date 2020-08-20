@@ -1,8 +1,12 @@
 # Coldgaze
-PBR Graphics rendering engine with RTX support and Vulkan API backend.
+PBR Graphics rendering engine with RTX support and Vulkan API backend. [**Demo video**](https://youtu.be/h3EHKwdCwBs)
 
 ![Rifle](https://github.com/ShpakovNikita/Coldgaze/blob/master/images/RenderedRifle.png)
-Rifle model is not mine, [here](https://sketchfab.com/3d-models/rainier-ak-3d-57aef8cdf42046a39f1ad9b428756213) is the link on the original model.
+Rifle model is not mine, [here](https://sketchfab.com/3d-models/rainier-ak-3d-57aef8cdf42046a39f1ad9b428756213) is the link on the original model.  
+
+![Rifle](https://github.com/ShpakovNikita/Coldgaze/blob/master/images/MaterialBall.png)
+Material ball test, [here](https://sketchfab.com/3d-models/material-ball-in-3d-coat-a6bdf1d11d714e07b9dd99dda02de965) is the link on the original model.  
+
 
 # Features
 - [x] GLTF2 format support
@@ -15,7 +19,7 @@ Rifle model is not mine, [here](https://sketchfab.com/3d-models/rainier-ak-3d-57
 - [ ] Refactor all dirty stuff in shaders
 
 # How to build?
-Below, you can find the build instructions. Don't forget to pull data from lfs and init submodules before build!
+Below, you can find the build instructions. It is highly recommended to install [Vulkan SDK](https://www.lunarg.com/vulkan-sdk/). Don't forget to pull data from lfs and init submodules before build!
 ```
 $ git submodule update --init --recursive
 $ git lfs install
@@ -27,3 +31,8 @@ $ git lfs pull
 $ CMake -G "Visual Studio 16 2019"
 ```
 After that, run generated solution.
+
+
+## Licence
+
+GNU GPLv3

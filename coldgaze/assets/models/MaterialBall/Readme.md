@@ -1,0 +1,1 @@
+# Original model can be found [here](https://sketchfab.com/3d-models/material-ball-in-3d-coat-a6bdf1d11d714e07b9dd99dda02de965)
