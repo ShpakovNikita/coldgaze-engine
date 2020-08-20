@@ -1,4 +1,5 @@
 # Coldgaze
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 PBR Graphics rendering engine with RTX support and Vulkan API backend. [**Demo video**](https://youtu.be/h3EHKwdCwBs)
 
 ![Rifle](https://github.com/ShpakovNikita/Coldgaze/blob/master/images/RenderedRifle.png)
