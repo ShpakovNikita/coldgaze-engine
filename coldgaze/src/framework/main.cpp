@@ -15,20 +15,20 @@ int main(int argc, char* argv[])
     freopen("CONOUT$", "w", stderr);
 #endif
 
-    CG::EngineConfig engine_config = { 1280, 720 };
+    CG::EngineConfig engineConfig = { 1280, 720 };
     for (size_t i = 0; i < argc; i++) {
-        engine_config.args.push_back(argv[i]);
+        engineConfig.args.push_back(argv[i]);
     };
 
-    CG::EngineImpl engine = { engine_config };
+    CG::EngineImpl engine = { engineConfig };
 
-    int exec_result;
+    int execResult;
     try {
         engine.Run();
-        exec_result = EXIT_SUCCESS;
+        execResult = EXIT_SUCCESS;
     } catch (const std::runtime_error& e) {
         std::cerr << e.what() << std::endl;
-        exec_result = EXIT_FAILURE;
+        execResult = EXIT_FAILURE;
     }
-    return exec_result;
+    return execResult;
 }
