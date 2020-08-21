@@ -20,7 +20,7 @@ Material ball test, [here](https://sketchfab.com/3d-models/material-ball-in-3d-c
 - [ ] Refactor all dirty stuff in shaders
 
 # How to build?
-Below, you can find the build instructions. It is highly recommended to install [Vulkan SDK](https://www.lunarg.com/vulkan-sdk/). Don't forget to pull data from lfs and init submodules before build!
+Below, you can find the build instructions. It is important to install [Vulkan SDK](https://www.lunarg.com/vulkan-sdk/). Don't forget to pull data from lfs and init submodules before build!
 ```
 $ git submodule update --init --recursive
 $ git lfs install
